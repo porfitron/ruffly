@@ -45,6 +45,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Keep the static EdgeSquare simulator reachable (not SPA fallback)
+        navigateFallbackDenylist: [/^\/preview/],
       },
       devOptions: {
         enabled: true,

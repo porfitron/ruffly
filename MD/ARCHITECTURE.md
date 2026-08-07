@@ -102,11 +102,26 @@ All application state is synchronized under the key `ruffly_app_data_v1`.
       "weight": 45,
       "weightUnit": "lbs",
       "goal": "maintain",
+      "goalIntensity": "moderate",
       "activityLevel": "neutered_adult",
       "activityMultiplier": 1.6,
       "calculatedRER": 520,
       "targetDER": 832,
-      "photoUrl": ""
+      "photoUrl": "",
+      "primaryFood": {
+        "name": "Orijen Original",
+        "kcalPerKg": 3940,
+        "kcalPerCup": 473
+      },
+      "careInfo": {
+        "ownerName": "Alex",
+        "ownerPhone": "555-0100",
+        "emergencyName": "Sam",
+        "emergencyPhone": "555-0199",
+        "vetName": "Sunnyvale Animal Hospital",
+        "vetPhone": "555-0142",
+        "notes": "Loves frozen carrots. No walks before 7am."
+      }
     }
   ],
   "pantry": [
@@ -117,6 +132,7 @@ All application state is synchronized under the key `ruffly_app_data_v1`.
       "category": "kibble",
       "kcalPerKg": 3940,
       "kcalPerCup": 473,
+      "kcalPerCan": null,
       "productUrl": "https://www.chewy.com/dp/12345"
     },
     {
@@ -133,6 +149,10 @@ All application state is synchronized under the key `ruffly_app_data_v1`.
     { "foodId": "food_101", "percentage": 80 },
     { "foodId": "food_102", "percentage": 20 }
   ],
+  "tripSettings": {
+    "days": 3,
+    "bufferMode": "plus1"
+  },
   "proTeaser": {
     "hasClickedAddDog": false,
     "userEmail": null

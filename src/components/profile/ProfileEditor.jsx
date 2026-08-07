@@ -1,72 +1,239 @@
+import { useEffect, useState } from 'react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
+import { Field, SegmentedControl, fieldClassName } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
+import {
+  ACTIVITY_OPTIONS,
+  GAIN_INTENSITY_OPTIONS,
+  GOAL_OPTIONS,
+  LOSS_INTENSITY_OPTIONS,
+  calculateDER,
+  calculateRER,
+  resolveGoalMultiplier,
+} from '../../utils/calculations'
 
-/** P1 — Dog profile setup (scaffold) */
+const EMPTY_FORM = {
+  name: '',
+  weight: '',
+  weightUnit: 'lbs',
+  goal: 'maintain',
+  goalIntensity: 'moderate',
+  activityLevel: 'neutered_adult',
+  photoUrl: '',
+}
+
+function dogToForm(dog) {
+  return {
+    name: dog.name ?? '',
+    weight: dog.weight?.toString() ?? '',
+    weightUnit: dog.weightUnit ?? 'lbs',
+    goal: dog.goal ?? 'maintain',
+    goalIntensity: dog.goalIntensity ?? 'moderate',
+    activityLevel: dog.activityLevel ?? 'neutered_adult',
+    photoUrl: dog.photoUrl ?? '',
+  }
+}
+
+function previewFromForm(form) {
+  const weight = Number(form.weight)
+  const multiplier = resolveGoalMultiplier(
+    form.goal,
+    form.activityLevel,
+    form.goalIntensity,
+  )
+  const rer = calculateRER(weight, form.weightUnit)
+  const der = calculateDER(rer, multiplier)
+  return { rer, der, multiplier }
+}
+
+/** P1 — Dog profile setup with live RER/DER */
 export default function ProfileEditor() {
-  const { activeDog, dogs, dispatch, createId } = useApp()
+  const { activeDog, dispatch, createId } = useApp()
+  const [form, setForm] = useState(() =>
+    activeDog ? dogToForm(activeDog) : EMPTY_FORM,
+  )
+  const [savedFlash, setSavedFlash] = useState(false)
 
-  function seedDemoDog() {
+  useEffect(() => {
+    setForm(activeDog ? dogToForm(activeDog) : EMPTY_FORM)
+  }, [activeDog?.id])
+
+  const preview = previewFromForm(form)
+  const canSave =
+    form.name.trim().length > 0 &&
+    Number(form.weight) > 0 &&
+    Number.isFinite(Number(form.weight))
+
+  function update(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  function handleSave(e) {
+    e.preventDefault()
+    if (!canSave) return
+
     dispatch({
       type: 'UPSERT_DOG',
       payload: {
-        id: createId('dog'),
-        name: 'Buster',
-        weight: 45,
-        weightUnit: 'lbs',
-        goal: 'maintain',
-        activityLevel: 'neutered_adult',
-        photoUrl: '',
+        id: activeDog?.id ?? createId('dog'),
+        name: form.name.trim(),
+        weight: Number(form.weight),
+        weightUnit: form.weightUnit,
+        goal: form.goal,
+        goalIntensity: form.goalIntensity,
+        activityLevel: form.activityLevel,
+        photoUrl: form.photoUrl,
+        primaryFood: activeDog?.primaryFood ?? null,
       },
     })
+    setSavedFlash(true)
+    window.setTimeout(() => setSavedFlash(false), 1600)
   }
 
-  if (!activeDog) {
-    return (
-      <Card className="text-center">
-        <h2 className="text-xl font-bold text-slate-800">Meet your pup</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Add a dog profile to unlock calorie and gram calculations.
-        </p>
-        <Button className="mt-5 w-full" onClick={seedDemoDog}>
-          Add demo dog
-        </Button>
-      </Card>
-    )
-  }
+  const intensityOptions =
+    form.goal === 'loss' ? LOSS_INTENSITY_OPTIONS : GAIN_INTENSITY_OPTIONS
 
   return (
     <Card>
-      <h2 className="text-xl font-bold text-slate-800">{activeDog.name}</h2>
-      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <dt className="text-slate-500">Weight</dt>
-          <dd className="font-semibold text-slate-800">
-            {activeDog.weight} {activeDog.weightUnit}
-          </dd>
+      <div className="flex items-start gap-4">
+        <div
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-amber-100 text-2xl font-extrabold text-[#F59E0B]"
+          aria-hidden
+        >
+          {form.name.trim() ? form.name.trim().charAt(0).toUpperCase() : '?'}
         </div>
         <div>
-          <dt className="text-slate-500">Goal</dt>
-          <dd className="font-semibold capitalize text-slate-800">
-            {activeDog.goal}
-          </dd>
+          <h2 className="text-xl font-bold text-slate-800">
+            {activeDog ? 'Edit pup profile' : 'Meet your pup'}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            We’ll calculate resting and daily calorie needs from weight, goal,
+            and life stage.
+          </p>
         </div>
-        <div>
-          <dt className="text-slate-500">RER</dt>
-          <dd className="font-semibold text-slate-800">
-            {activeDog.calculatedRER} kcal
-          </dd>
+      </div>
+
+      <form className="mt-5 space-y-4" onSubmit={handleSave}>
+        <Field label="Name">
+          <input
+            className={fieldClassName}
+            value={form.name}
+            onChange={(e) => update('name', e.target.value)}
+            placeholder="e.g. Buster"
+            autoComplete="off"
+            required
+          />
+        </Field>
+
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <Field label="Weight">
+            <input
+              className={fieldClassName}
+              type="number"
+              inputMode="decimal"
+              min="0.1"
+              step="0.1"
+              value={form.weight}
+              onChange={(e) => update('weight', e.target.value)}
+              placeholder="45"
+              required
+            />
+          </Field>
+          <Field label="Unit" className="w-28">
+            <SegmentedControl
+              ariaLabel="Weight unit"
+              value={form.weightUnit}
+              onChange={(value) => update('weightUnit', value)}
+              options={[
+                { value: 'lbs', label: 'lbs' },
+                { value: 'kg', label: 'kg' },
+              ]}
+            />
+          </Field>
         </div>
-        <div>
-          <dt className="text-slate-500">Daily target (DER)</dt>
-          <dd className="font-semibold text-[#10B981]">
-            {activeDog.targetDER} kcal
-          </dd>
+
+        <Field label="Weight goal">
+          <SegmentedControl
+            ariaLabel="Weight goal"
+            value={form.goal}
+            onChange={(value) => update('goal', value)}
+            options={GOAL_OPTIONS}
+          />
+        </Field>
+
+        {form.goal === 'maintain' ? (
+          <Field label="Life stage & activity">
+            <select
+              className={fieldClassName}
+              value={form.activityLevel}
+              onChange={(e) => update('activityLevel', e.target.value)}
+            >
+              {ACTIVITY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label} ({option.multiplier}× RER)
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          <Field
+            label={form.goal === 'loss' ? 'Loss pace' : 'Gain pace'}
+            hint="Veterinary feeding ranges — check with your vet for your dog."
+          >
+            <select
+              className={fieldClassName}
+              value={form.goalIntensity}
+              onChange={(e) => update('goalIntensity', e.target.value)}
+            >
+              {intensityOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+
+        <div className="rounded-3xl bg-[#FBF9F5] p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Live estimate
+          </p>
+          <dl className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <dt className="text-sm text-slate-500">RER</dt>
+              <dd className="text-lg font-extrabold text-slate-800">
+                {preview.rer || '—'}
+                <span className="ml-1 text-sm font-semibold text-slate-400">
+                  kcal
+                </span>
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm text-slate-500">Daily target (DER)</dt>
+              <dd className="text-lg font-extrabold text-[#10B981]">
+                {preview.der || '—'}
+                <span className="ml-1 text-sm font-semibold text-emerald-400">
+                  kcal
+                </span>
+              </dd>
+            </div>
+          </dl>
+          {preview.multiplier > 0 ? (
+            <p className="mt-2 text-xs text-slate-400">
+              Using {preview.multiplier}× RER multiplier
+            </p>
+          ) : null}
         </div>
-      </dl>
-      <p className="mt-4 text-xs text-slate-400">
-        {dogs.length} dog{dogs.length === 1 ? '' : 's'} saved in localStorage
-      </p>
+
+        <Button type="submit" className="w-full" disabled={!canSave}>
+          {savedFlash
+            ? 'Saved to this phone'
+            : activeDog
+              ? 'Save changes'
+              : 'Save pup profile'}
+        </Button>
+      </form>
     </Card>
   )
 }

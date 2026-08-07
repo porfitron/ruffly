@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useReducer } from 'react'
-import { loadAppData, saveAppData, createId } from '../utils/storage'
+import { loadAppData, saveAppData, createId, EMPTY_CARE_INFO } from '../utils/storage'
 import {
   calculateDER,
   calculateRER,
@@ -9,11 +9,20 @@ import {
 const AppContext = createContext(null)
 
 function enrichDog(dog) {
-  const multiplier =
-    dog.activityMultiplier ?? resolveGoalMultiplier(dog.goal, dog.activityLevel)
+  const multiplier = resolveGoalMultiplier(
+    dog.goal,
+    dog.activityLevel,
+    dog.goalIntensity,
+  )
   const calculatedRER = calculateRER(dog.weight, dog.weightUnit)
   const targetDER = calculateDER(calculatedRER, multiplier)
-  return { ...dog, activityMultiplier: multiplier, calculatedRER, targetDER }
+  return {
+    ...dog,
+    careInfo: { ...EMPTY_CARE_INFO, ...(dog.careInfo ?? {}) },
+    activityMultiplier: multiplier,
+    calculatedRER,
+    targetDER,
+  }
 }
 
 function reducer(state, action) {
@@ -50,6 +59,34 @@ function reducer(state, action) {
       }
     case 'SET_MEAL_PLAN':
       return { ...state, currentMealPlan: action.payload }
+    case 'SET_MEAL_PERCENTAGE': {
+      const { foodId, percentage } = action.payload
+      const clamped = Math.min(Math.max(Number(percentage) || 0, 0), 100)
+      const exists = state.currentMealPlan.some((item) => item.foodId === foodId)
+      const currentMealPlan = exists
+        ? state.currentMealPlan.map((item) =>
+            item.foodId === foodId ? { ...item, percentage: clamped } : item,
+          )
+        : [...state.currentMealPlan, { foodId, percentage: clamped }]
+      return { ...state, currentMealPlan }
+    }
+    case 'REMOVE_FROM_MEAL':
+      return {
+        ...state,
+        currentMealPlan: state.currentMealPlan.filter(
+          (item) => item.foodId !== action.payload,
+        ),
+      }
+    case 'ADD_TO_MEAL': {
+      const foodId = action.payload
+      if (state.currentMealPlan.some((item) => item.foodId === foodId)) {
+        return state
+      }
+      return {
+        ...state,
+        currentMealPlan: [...state.currentMealPlan, { foodId, percentage: 0 }],
+      }
+    }
     case 'MARK_ADD_DOG_TEASER':
       return {
         ...state,
@@ -60,6 +97,27 @@ function reducer(state, action) {
         ...state,
         proTeaser: { ...state.proTeaser, userEmail: action.payload },
       }
+    case 'SET_TRIP_SETTINGS':
+      return {
+        ...state,
+        tripSettings: { ...state.tripSettings, ...action.payload },
+      }
+    case 'UPDATE_CARE_INFO': {
+      if (!state.activeDogId) return state
+      const dogs = state.dogs.map((dog) =>
+        dog.id === state.activeDogId
+          ? {
+              ...dog,
+              careInfo: {
+                ...EMPTY_CARE_INFO,
+                ...(dog.careInfo ?? {}),
+                ...action.payload,
+              },
+            }
+          : dog,
+      )
+      return { ...state, dogs }
+    }
     case 'REPLACE_ALL':
       return action.payload
     default:

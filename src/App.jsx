@@ -2,12 +2,12 @@ import { useState } from 'react'
 import Header from './components/layout/Header'
 import Navigation from './components/layout/Navigation'
 import ProfileEditor from './components/profile/ProfileEditor'
+import PortionCalculator from './components/profile/PortionCalculator'
 import ProTeaserModal from './components/profile/ProTeaserModal'
-import PantryList from './components/pantry/PantryList'
-import FoodItemForm from './components/pantry/FoodItemForm'
+import { useApp } from './context/AppContext'
+import PantryTab from './components/pantry/PantryTab'
 import BowlBalancer from './components/bowl/BowlBalancer'
-import TripCalculator from './components/trip/TripCalculator'
-import DogsitterSheet from './components/trip/DogsitterSheet'
+import TripTab from './components/trip/TripTab'
 
 const SUBTITLES = {
   profile: 'Precision nutrition for your pup',
@@ -18,37 +18,33 @@ const SUBTITLES = {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('profile')
+  const { activeDog } = useApp()
 
   return (
-    <div className="mx-auto min-h-dvh max-w-lg bg-[#FBF9F5] pb-24">
-      <Header subtitle={SUBTITLES[activeTab]} />
+    <div className="mx-auto min-h-dvh max-w-lg bg-[#FBF9F5] pb-24 print:max-w-none print:bg-white print:pb-0">
+      <div className="print:hidden">
+        <Header subtitle={SUBTITLES[activeTab]} />
+      </div>
 
-      <main className="space-y-4 px-4">
+      <main className="space-y-4 px-4 print:space-y-0 print:px-0">
         {activeTab === 'profile' && (
           <>
             <ProfileEditor />
-            <ProTeaserModal />
+            <PortionCalculator />
+            {activeDog ? <ProTeaserModal /> : null}
           </>
         )}
 
-        {activeTab === 'pantry' && (
-          <>
-            <PantryList />
-            <FoodItemForm />
-          </>
-        )}
+        {activeTab === 'pantry' && <PantryTab />}
 
         {activeTab === 'bowl' && <BowlBalancer />}
 
-        {activeTab === 'trip' && (
-          <>
-            <TripCalculator />
-            <DogsitterSheet />
-          </>
-        )}
+        {activeTab === 'trip' && <TripTab />}
       </main>
 
-      <Navigation activeTab={activeTab} onChange={setActiveTab} />
+      <div className="print:hidden">
+        <Navigation activeTab={activeTab} onChange={setActiveTab} />
+      </div>
     </div>
   )
 }

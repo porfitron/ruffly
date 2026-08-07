@@ -26,4 +26,16 @@ body {
   body {
     background: white;
   }
+
+  @page {
+    margin: 0.6in;
+  }
+
+  .dogsitter-sheet {
+    break-inside: avoid;
+  }
+
+  a[href^='http']::after {
+    content: none;
+  }
 }
