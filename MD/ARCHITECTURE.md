@@ -73,6 +73,15 @@ npm run build    # production bundle → dist/
 npm run preview  # verify installability on a phone via tunnel/LAN HTTPS
 ```
 
+### GitHub Pages deploy
+Pushing to `main` runs `.github/workflows/deploy.yml`, which builds the app and publishes `dist/` via GitHub Actions.
+
+One-time GitHub setup (repo → **Settings → Pages**):
+1. **Source:** GitHub Actions (not “Deploy from a branch”).
+2. Keep the custom domain / path that serves `https://porfir.io/ruffly/`.
+
+After you commit the workflow file, the first Actions run may need you to approve the `github-pages` environment if GitHub prompts for it.
+
 ## 3. State Flow
 
 ```
