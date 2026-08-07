@@ -125,8 +125,16 @@ function reducer(state, action) {
   }
 }
 
+function hydrateAppData() {
+  const data = loadAppData()
+  return {
+    ...data,
+    dogs: (data.dogs ?? []).map(enrichDog),
+  }
+}
+
 export function AppProvider({ children }) {
-  const [state, dispatch] = useReducer(reducer, undefined, loadAppData)
+  const [state, dispatch] = useReducer(reducer, undefined, hydrateAppData)
 
   useEffect(() => {
     saveAppData(state)

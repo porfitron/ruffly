@@ -95,7 +95,7 @@ loadAppData() on boot
 ```
 
 - All list mutations are immutable (spread / `map` / `filter`).
-- Dog RER/DER is recomputed in the reducer on `UPSERT_DOG` via `src/utils/calculations.js`.
+- Dog RER/DER is recomputed on boot (`hydrateAppData`) and on `UPSERT_DOG` via `src/utils/calculations.js`, so multiplier changes apply without re-saving the profile.
 
 ## 4. LocalStorage Data Schema
 
