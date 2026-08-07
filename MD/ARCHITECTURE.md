@@ -113,9 +113,9 @@ All application state is synchronized under the key `ruffly_app_data_v1`.
       "goal": "maintain",
       "goalIntensity": "moderate",
       "activityLevel": "neutered_adult",
-      "activityMultiplier": 1.6,
+      "activityMultiplier": 1.4,
       "calculatedRER": 520,
-      "targetDER": 832,
+      "targetDER": 728,
       "photoUrl": "",
       "primaryFood": {
         "name": "Orijen Original",

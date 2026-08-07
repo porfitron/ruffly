@@ -87,7 +87,8 @@ export const ACTIVITY_MULTIPLIERS = {
   weight_loss_aggressive: 1.0,
   weight_loss: 1.1,
   weight_loss_mild: 1.2,
-  neutered_adult: 1.6,
+  inactive_adult: 1.0,
+  neutered_adult: 1.4,
   intact_adult: 1.8,
   active_working: 2.0,
   puppy_0_4: 3.0,
@@ -98,7 +99,8 @@ export const ACTIVITY_MULTIPLIERS = {
 }
 
 export const ACTIVITY_OPTIONS = [
-  { value: 'neutered_adult', label: 'Neutered adult', multiplier: 1.6 },
+  { value: 'inactive_adult', label: 'Inactive adult', multiplier: 1.0 },
+  { value: 'neutered_adult', label: 'Typical pet adult', multiplier: 1.4 },
   { value: 'intact_adult', label: 'Intact adult', multiplier: 1.8 },
   { value: 'active_working', label: 'Active / working', multiplier: 2.0 },
   { value: 'puppy_0_4', label: 'Puppy (0–4 months)', multiplier: 3.0 },

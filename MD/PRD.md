@@ -38,7 +38,7 @@
   * Name, Photo/Avatar.
   * Weight ($lbs$ or $kg$).
   * Weight Goal: Maintain, Weight Loss ($1.0 - 1.2 \times RER$), Weight Gain ($1.2 - 1.4 \times RER$).
-  * Life Stage & Activity Level (Neutered Adult, Intact Adult, Active/Working, Puppy).
+  * Life Stage & Activity Level (Inactive Adult, Typical Pet Adult, Intact Adult, Active/Working, Puppy).
 * **Mathematical Calculation Logic:**
   * **Resting Energy Requirement (RER):**
     $$RER = 70 \times (\text{weight in kg})^{0.75}$$
