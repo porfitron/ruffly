@@ -72,10 +72,12 @@
 
 ## 4. Technical Constraints & Architecture
 * **Stack:** React / Vite / Tailwind CSS / Lucide React Icons.
-* **Hosting:** GitHub Pages static hosting.
+* **Hosting:** GitHub Pages static hosting at `/ruffly/` (e.g. `https://porfir.io/ruffly/`).
 * **Persistence:** `localStorage` key `ruffly_app_data_v1` (no server DB). See `MD/ARCHITECTURE.md` for schema.
 * **PWA / Installability:**
   * `vite-plugin-pwa` generates the web app manifest + Workbox service worker.
+  * Vite `base` / manifest `start_url` + `scope` are `/ruffly/` so assets resolve on the project Pages URL.
+  * **Deploy the `dist/` output of `npm run build`**, not the repo source — publishing `index.html` that points at `/src/main.jsx` will white-screen in browsers.
   * Android Chrome: Install / Add to Home screen from the browser menu (or install banner when criteria are met).
   * iOS Safari: Share → **Add to Home Screen** (requires HTTPS + `apple-mobile-web-app-*` meta tags; already wired in `index.html`).
 * **Source of truth for formulas:** `src/utils/calculations.js`.

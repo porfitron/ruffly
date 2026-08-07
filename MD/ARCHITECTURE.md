@@ -57,7 +57,7 @@ ruffly/
 | Icons | Lucide React |
 | Persistence | `localStorage` key `ruffly_app_data_v1` |
 | PWA | `vite-plugin-pwa` (manifest + Workbox service worker) |
-| Hosting | GitHub Pages (static) |
+| Hosting | GitHub Pages under `/ruffly/` (`base: '/ruffly/'`) |
 
 ### Installability checklist
 - Web App Manifest (`manifest.webmanifest` generated at build)

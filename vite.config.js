@@ -3,9 +3,11 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const base = '/ruffly/'
+
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/',
+  base,
   plugins: [
     react(),
     tailwindcss(),
@@ -21,8 +23,8 @@ export default defineConfig({
         background_color: '#FBF9F5',
         display: 'standalone',
         orientation: 'portrait-primary',
-        start_url: '/',
-        scope: '/',
+        start_url: base,
+        scope: base,
         categories: ['lifestyle', 'utilities'],
         icons: [
           {
@@ -45,8 +47,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Keep the static EdgeSquare simulator reachable (not SPA fallback)
-        navigateFallbackDenylist: [/^\/preview/],
+        // Avoid workbox → terser crashes in some CI/sandbox environments
+        mode: 'development',
       },
       devOptions: {
         enabled: true,
