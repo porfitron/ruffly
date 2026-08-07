@@ -1,0 +1,29 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', ui-rounded, system-ui, sans-serif;
+  --color-ruffly-cream: #fbf9f5;
+  --color-ruffly-gold: #f59e0b;
+  --color-ruffly-sage: #10b981;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: var(--color-ruffly-cream);
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+}
