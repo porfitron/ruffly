@@ -18,6 +18,18 @@ function formatMealParts(servings, which) {
   return parts.length ? parts.join(' · ') : '—'
 }
 
+function formatDailyParts(servings) {
+  const parts = []
+  if (servings.grams) parts.push(`${servings.grams} g`)
+  if (servings.cups) parts.push(`${servings.cups} cups`)
+  if (servings.cans) parts.push(`${servings.cans} cans`)
+  return parts.length ? parts.join(' · ') : '—'
+}
+
+function isTreat(item) {
+  return item.food?.category === 'treat'
+}
+
 function ContactBlock({ label, name, phone }) {
   if (!name && !phone) return null
   return (
@@ -64,6 +76,22 @@ export default function DogsitterSheet() {
     month: 'long',
     day: 'numeric',
   })
+  const mealFoods = feedingPlan.filter((item) => !isTreat(item))
+  const treatFoods = feedingPlan.filter(isTreat)
+  const mealSessions = [
+    { label: 'Morning', which: 'breakfast', gramsKey: 'breakfastGrams' },
+    { label: 'Evening', which: 'dinner', gramsKey: 'dinnerGrams' },
+  ].map((meal) => ({
+    ...meal,
+    totalGrams: mealFoods.reduce(
+      (sum, item) => sum + (Number(item.servings[meal.gramsKey]) || 0),
+      0,
+    ),
+  }))
+  const treatTotalGrams = treatFoods.reduce(
+    (sum, item) => sum + (Number(item.servings.grams) || 0),
+    0,
+  )
 
   return (
     <div className="space-y-3">
@@ -114,59 +142,99 @@ export default function DogsitterSheet() {
               Pup).
             </p>
           ) : (
-            <ul className="mt-3 space-y-3">
-              {feedingPlan.map((item) => (
-                <li
-                  key={item.food.id}
-                  className="rounded-2xl border border-amber-100 p-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-bold text-slate-800">{item.food.name}</p>
-                      <p className="text-xs text-slate-500">
-                        {[item.food.brand, `${item.percentage}% of daily kcal`]
-                          .filter(Boolean)
-                          .join(' · ')}
+            <div className="mt-3 space-y-3">
+              {mealFoods.length > 0
+                ? mealSessions.map((meal) => (
+                    <div
+                      key={meal.which}
+                      className="rounded-2xl border border-amber-100 p-3"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        {meal.label}
                       </p>
+                      <ul className="mt-2 space-y-2">
+                        {mealFoods.map((item) => (
+                          <li
+                            key={`${meal.which}-${item.food.id}`}
+                            className="rounded-xl bg-[#FBF9F5] px-3 py-2 print:bg-slate-50"
+                          >
+                            <p className="font-bold text-slate-800">
+                              {item.food.name}
+                            </p>
+                            {item.food.brand ? (
+                              <p className="text-xs text-slate-500">
+                                {item.food.brand}
+                              </p>
+                            ) : null}
+                            <p className="mt-1 text-sm font-bold text-slate-800">
+                              {formatMealParts(item.servings, meal.which)}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                      {meal.totalGrams > 0 ? (
+                        <p className="mt-2 text-right text-sm font-bold text-slate-800">
+                          Total: {meal.totalGrams} g
+                        </p>
+                      ) : null}
                     </div>
-                    {item.food.productUrl ? (
-                      <a
-                        href={item.food.productUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-[#F59E0B] print:text-slate-700"
+                  ))
+                : null}
+              {treatFoods.length > 0 ? (
+                <div className="rounded-2xl border border-amber-100 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Treats
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    {treatFoods.map((item) => (
+                      <li
+                        key={`treat-${item.food.id}`}
+                        className="rounded-xl bg-[#FBF9F5] px-3 py-2 print:bg-slate-50"
                       >
-                        Reorder
-                        <ExternalLink size={12} />
-                      </a>
-                    ) : null}
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                    <div className="rounded-xl bg-[#FBF9F5] px-3 py-2 print:bg-slate-50">
-                      <p className="text-xs font-semibold uppercase text-slate-400">
-                        Morning
-                      </p>
-                      <p className="font-bold text-slate-800">
-                        {formatMealParts(item.servings, 'breakfast')}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-[#FBF9F5] px-3 py-2 print:bg-slate-50">
-                      <p className="text-xs font-semibold uppercase text-slate-400">
-                        Evening
-                      </p>
-                      <p className="font-bold text-slate-800">
-                        {formatMealParts(item.servings, 'dinner')}
-                      </p>
-                    </div>
-                  </div>
-                  {item.food.productUrl ? (
-                    <p className="mt-2 break-all text-xs text-slate-400 print:block">
-                      {item.food.productUrl}
+                        <p className="font-bold text-slate-800">
+                          {item.food.name}
+                        </p>
+                        {item.food.brand ? (
+                          <p className="text-xs text-slate-500">
+                            {item.food.brand}
+                          </p>
+                        ) : null}
+                        <p className="mt-1 text-sm font-bold text-slate-800">
+                          {formatDailyParts(item.servings)}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                  {treatTotalGrams > 0 ? (
+                    <p className="mt-2 text-right text-sm font-bold text-slate-800">
+                      Total: {treatTotalGrams} g
                     </p>
                   ) : null}
-                </li>
-              ))}
-            </ul>
+                </div>
+              ) : null}
+              {feedingPlan.some((item) => item.food.productUrl) ? (
+                <ul className="space-y-2">
+                  {feedingPlan
+                    .filter((item) => item.food.productUrl)
+                    .map((item) => (
+                      <li key={`reorder-${item.food.id}`}>
+                        <a
+                          href={item.food.productUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#F59E0B] print:text-slate-700"
+                        >
+                          Reorder {item.food.name}
+                          <ExternalLink size={12} />
+                        </a>
+                        <p className="break-all text-xs text-slate-400 print:block">
+                          {item.food.productUrl}
+                        </p>
+                      </li>
+                    ))}
+                </ul>
+              ) : null}
+            </div>
           )}
         </section>
 
