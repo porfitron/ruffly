@@ -36,10 +36,10 @@ function SharePlanDialog({ open, onClose }) {
       try {
         const payload = encodePlanForQr(planStateFromApp(app))
         const url = await QRCode.toDataURL(payload, {
-          errorCorrectionLevel: 'L',
-          margin: 1,
-          width: 280,
-          color: { dark: '#1e293b', light: '#ffffff' },
+          errorCorrectionLevel: 'M',
+          margin: 2,
+          width: 360,
+          color: { dark: '#0f172a', light: '#ffffff' },
         })
         if (!cancelled) setQrUrl(url)
       } catch (err) {
@@ -55,20 +55,21 @@ function SharePlanDialog({ open, onClose }) {
   return (
     <Modal open={open} title="Share Plan" onClose={onClose}>
       <p className="text-sm text-slate-500">
-        Have the other person open Receive Plan and scan this code.
+        Have the other person open Receive Plan and scan this code. Turn up
+        screen brightness and hold the phones steady.
       </p>
       {error ? (
         <p className="mt-4 text-sm text-red-600">{error}</p>
       ) : (
-        <div className="mt-4 flex justify-center rounded-3xl bg-white p-4">
+        <div className="mt-4 flex justify-center rounded-3xl bg-white p-3">
           {qrUrl ? (
             <img
               src={qrUrl}
               alt="Ruffly plan QR code"
-              className="h-64 w-64"
+              className="h-72 w-72"
             />
           ) : (
-            <div className="flex h-64 w-64 items-center justify-center text-sm text-slate-400">
+            <div className="flex h-72 w-72 items-center justify-center text-sm text-slate-400">
               Generating…
             </div>
           )}
@@ -101,7 +102,17 @@ function ReceivePlanDialog({ open, onClose }) {
       try {
         await scanner.start(
           { facingMode: 'environment' },
-          { fps: 8, qrbox: { width: 220, height: 220 } },
+          {
+            fps: 12,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const edge = Math.floor(
+                Math.min(viewfinderWidth, viewfinderHeight) * 0.85,
+              )
+              return { width: edge, height: edge }
+            },
+            aspectRatio: 1,
+            disableFlip: false,
+          },
           (decoded) => {
             if (handledRef.current || cancelled) return
             try {
