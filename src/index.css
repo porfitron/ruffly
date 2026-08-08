@@ -39,3 +39,20 @@ body {
     content: none;
   }
 }
+
+#ruffly-qr-reader {
+  width: 100%;
+}
+
+#ruffly-qr-reader video {
+  width: 100% !important;
+  border-radius: 1.5rem;
+}
+
+#ruffly-qr-reader__scan_region {
+  min-height: 14rem;
+}
+
+#ruffly-qr-reader__dashboard_section {
+  display: none !important;
+}

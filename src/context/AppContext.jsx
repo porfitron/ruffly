@@ -118,8 +118,13 @@ function reducer(state, action) {
       )
       return { ...state, dogs }
     }
-    case 'REPLACE_ALL':
-      return action.payload
+    case 'REPLACE_ALL': {
+      const next = action.payload
+      return {
+        ...next,
+        dogs: (next.dogs ?? []).map(enrichDog),
+      }
+    }
     default:
       return state
   }

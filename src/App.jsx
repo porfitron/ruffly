@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Header from './components/layout/Header'
 import Navigation from './components/layout/Navigation'
+import MenuDialogs from './components/layout/MenuDialogs'
 import ProfileEditor from './components/profile/ProfileEditor'
 import PortionCalculator from './components/profile/PortionCalculator'
 import ProTeaserModal from './components/profile/ProTeaserModal'
@@ -18,12 +19,36 @@ const SUBTITLES = {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('profile')
+  const [menuDialog, setMenuDialog] = useState(null)
   const { activeDog } = useApp()
+
+  const menuItems = [
+    { id: 'share', label: 'Share Plan', onClick: () => setMenuDialog('share') },
+    {
+      id: 'receive',
+      label: 'Receive Plan',
+      onClick: () => setMenuDialog('receive'),
+    },
+    {
+      id: 'about',
+      label: 'About Us',
+      onClick: () => {
+        const aboutUrl = `${import.meta.env.BASE_URL}about/`
+        window.open(aboutUrl, '_blank', 'noopener,noreferrer')
+      },
+    },
+    {
+      id: 'reset',
+      label: 'Reset App',
+      danger: true,
+      onClick: () => setMenuDialog('reset'),
+    },
+  ]
 
   return (
     <div className="mx-auto min-h-dvh max-w-lg bg-[#FBF9F5] pb-24 print:max-w-none print:bg-white print:pb-0">
       <div className="print:hidden">
-        <Header subtitle={SUBTITLES[activeTab]} />
+        <Header subtitle={SUBTITLES[activeTab]} menuItems={menuItems} />
       </div>
 
       <main className="space-y-4 px-4 print:space-y-0 print:px-0">
@@ -45,6 +70,8 @@ export default function App() {
       <div className="print:hidden">
         <Navigation activeTab={activeTab} onChange={setActiveTab} />
       </div>
+
+      <MenuDialogs dialog={menuDialog} onClose={() => setMenuDialog(null)} />
     </div>
   )
 }
