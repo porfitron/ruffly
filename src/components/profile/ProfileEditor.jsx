@@ -5,31 +5,44 @@ import { Field, SegmentedControl, fieldClassName } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
 import {
   ACTIVITY_OPTIONS,
-  GAIN_INTENSITY_OPTIONS,
-  GOAL_OPTIONS,
-  LOSS_INTENSITY_OPTIONS,
   calculateDER,
   calculateRER,
   resolveGoalMultiplier,
 } from '../../utils/calculations'
 
+const CALORIE_MODE_OPTIONS = [
+  { value: 'manual', label: 'Manual' },
+  { value: 'calculator', label: 'Calculator' },
+]
+
 const EMPTY_FORM = {
   name: '',
   weight: '',
   weightUnit: 'lbs',
-  goal: 'maintain',
-  goalIntensity: 'moderate',
+  calorieMode: 'manual',
+  manualTargetKcal: '',
   activityLevel: 'neutered_adult',
   photoUrl: '',
 }
 
 function dogToForm(dog) {
+  // Legacy maintain/loss/gain dogs without calorieMode: keep their DER
+  // by opening in Manual when they used a weight-goal multiplier.
+  const calorieMode =
+    dog.calorieMode === 'manual' ||
+    (!dog.calorieMode && (dog.goal === 'loss' || dog.goal === 'gain'))
+      ? 'manual'
+      : 'calculator'
+  const seededTarget =
+    dog.manualTargetKcal != null && Number(dog.manualTargetKcal) > 0
+      ? dog.manualTargetKcal
+      : dog.targetDER
   return {
     name: dog.name ?? '',
     weight: dog.weight?.toString() ?? '',
     weightUnit: dog.weightUnit ?? 'lbs',
-    goal: dog.goal ?? 'maintain',
-    goalIntensity: dog.goalIntensity ?? 'moderate',
+    calorieMode,
+    manualTargetKcal: seededTarget ? String(seededTarget) : '',
     activityLevel: dog.activityLevel ?? 'neutered_adult',
     photoUrl: dog.photoUrl ?? '',
   }
@@ -37,12 +50,15 @@ function dogToForm(dog) {
 
 function previewFromForm(form) {
   const weight = Number(form.weight)
-  const multiplier = resolveGoalMultiplier(
-    form.goal,
-    form.activityLevel,
-    form.goalIntensity,
-  )
   const rer = calculateRER(weight, form.weightUnit)
+
+  if (form.calorieMode === 'manual') {
+    const manual = Number(form.manualTargetKcal)
+    const der = Number.isFinite(manual) && manual > 0 ? Math.round(manual) : 0
+    return { rer, der, multiplier: 0 }
+  }
+
+  const multiplier = resolveGoalMultiplier('maintain', form.activityLevel)
   const der = calculateDER(rer, multiplier)
   return { rer, der, multiplier }
 }
@@ -79,20 +95,44 @@ export default function ProfileEditor() {
   }, [activeDog?.id])
 
   const preview = previewFromForm(form)
+  const manualTarget = Number(form.manualTargetKcal)
+  const hasManualTarget =
+    form.calorieMode !== 'manual' ||
+    (Number.isFinite(manualTarget) && manualTarget > 0)
   const canSave =
     form.name.trim().length > 0 &&
     Number(form.weight) > 0 &&
-    Number.isFinite(Number(form.weight))
+    Number.isFinite(Number(form.weight)) &&
+    hasManualTarget
   const isComplete = Boolean(activeDog)
   const displayName = activeDog?.name || form.name.trim() || 'Your pup'
 
   function update(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }))
+    setForm((prev) => {
+      if (field === 'calorieMode' && value === 'manual') {
+        const nextPreview = previewFromForm({ ...prev, calorieMode: 'calculator' })
+        const hasTarget =
+          Number(prev.manualTargetKcal) > 0 &&
+          Number.isFinite(Number(prev.manualTargetKcal))
+        return {
+          ...prev,
+          calorieMode: value,
+          manualTargetKcal: hasTarget
+            ? prev.manualTargetKcal
+            : nextPreview.der
+              ? String(nextPreview.der)
+              : prev.manualTargetKcal,
+        }
+      }
+      return { ...prev, [field]: value }
+    })
   }
 
   function handleSave(e) {
     e.preventDefault()
     if (!canSave) return
+
+    const isManual = form.calorieMode === 'manual'
 
     dispatch({
       type: 'UPSERT_DOG',
@@ -101,20 +141,21 @@ export default function ProfileEditor() {
         name: form.name.trim(),
         weight: Number(form.weight),
         weightUnit: form.weightUnit,
-        goal: form.goal,
-        goalIntensity: form.goalIntensity,
+        calorieMode: isManual ? 'manual' : 'calculator',
+        manualTargetKcal: isManual ? Math.round(Number(form.manualTargetKcal)) : null,
+        goal: 'maintain',
+        goalIntensity: 'moderate',
         activityLevel: form.activityLevel,
         photoUrl: form.photoUrl,
         primaryFood: activeDog?.primaryFood ?? null,
+        careInfo: activeDog?.careInfo ?? undefined,
+        mealsPerDay: activeDog?.mealsPerDay === 1 ? 1 : 2,
       },
     })
     setSavedFlash(true)
     setExpanded(false)
     window.setTimeout(() => setSavedFlash(false), 1600)
   }
-
-  const intensityOptions =
-    form.goal === 'loss' ? LOSS_INTENSITY_OPTIONS : GAIN_INTENSITY_OPTIONS
 
   if (isComplete && !expanded) {
     return (
@@ -155,8 +196,8 @@ export default function ProfileEditor() {
             {activeDog ? 'Edit pup profile' : 'Meet your pup'}
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            We’ll calculate resting and daily calorie needs from weight, goal,
-            and life stage.
+            Set a daily calorie target manually, or calculate it from weight and
+            life stage.
           </p>
         </div>
         {isComplete ? (
@@ -211,16 +252,33 @@ export default function ProfileEditor() {
           </Field>
         </div>
 
-        <Field label="Weight goal">
+        <Field label="Target Calories per Day">
           <SegmentedControl
-            ariaLabel="Weight goal"
-            value={form.goal}
-            onChange={(value) => update('goal', value)}
-            options={GOAL_OPTIONS}
+            ariaLabel="Target calories mode"
+            value={form.calorieMode}
+            onChange={(value) => update('calorieMode', value)}
+            options={CALORIE_MODE_OPTIONS}
           />
         </Field>
 
-        {form.goal === 'maintain' ? (
+        {form.calorieMode === 'manual' ? (
+          <Field
+            label="Daily total target"
+            hint="Enter the total kcal you want to feed per day."
+          >
+            <input
+              className={fieldClassName}
+              type="number"
+              inputMode="numeric"
+              min="1"
+              step="1"
+              value={form.manualTargetKcal}
+              onChange={(e) => update('manualTargetKcal', e.target.value)}
+              placeholder="e.g. 850"
+              required
+            />
+          </Field>
+        ) : (
           <Field label="Life stage & activity">
             <select
               className={fieldClassName}
@@ -230,23 +288,6 @@ export default function ProfileEditor() {
               {ACTIVITY_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label} ({option.multiplier}× RER)
-                </option>
-              ))}
-            </select>
-          </Field>
-        ) : (
-          <Field
-            label={form.goal === 'loss' ? 'Loss pace' : 'Gain pace'}
-            hint="Veterinary feeding ranges — check with your vet for your dog."
-          >
-            <select
-              className={fieldClassName}
-              value={form.goalIntensity}
-              onChange={(e) => update('goalIntensity', e.target.value)}
-            >
-              {intensityOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
                 </option>
               ))}
             </select>
@@ -277,9 +318,14 @@ export default function ProfileEditor() {
               </dd>
             </div>
           </dl>
-          {preview.multiplier > 0 ? (
+          {form.calorieMode === 'calculator' && preview.multiplier > 0 ? (
             <p className="mt-2 text-xs text-slate-400">
               Using {preview.multiplier}× RER multiplier
+            </p>
+          ) : null}
+          {form.calorieMode === 'manual' && preview.der > 0 ? (
+            <p className="mt-2 text-xs text-slate-400">
+              Using your manual daily target
             </p>
           ) : null}
         </div>

@@ -2,19 +2,19 @@ import { ExternalLink, Printer } from 'lucide-react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
 import { useApp } from '../../context/AppContext'
-import { resolveActiveFeedingPlan } from '../../utils/calculations'
+import {
+  resolveActiveFeedingPlan,
+  resolveMealSessions,
+} from '../../utils/calculations'
 
-function formatMealParts(servings, which) {
+function formatMealParts(servings, meal) {
   const parts = []
-  if (which === 'breakfast') {
-    if (servings.breakfastGrams) parts.push(`${servings.breakfastGrams} g`)
-    if (servings.breakfastCups) parts.push(`${servings.breakfastCups} cups`)
-    if (servings.breakfastCans) parts.push(`${servings.breakfastCans} cans`)
-  } else {
-    if (servings.dinnerGrams) parts.push(`${servings.dinnerGrams} g`)
-    if (servings.dinnerCups) parts.push(`${servings.dinnerCups} cups`)
-    if (servings.dinnerCans) parts.push(`${servings.dinnerCans} cans`)
-  }
+  const grams = servings?.[meal.gramsKey]
+  const cups = servings?.[meal.cupsKey]
+  const cans = servings?.[meal.cansKey]
+  if (grams) parts.push(`${grams} g`)
+  if (cups) parts.push(`${cups} cups`)
+  if (cans) parts.push(`${cans} cans`)
   return parts.length ? parts.join(' · ') : '—'
 }
 
@@ -78,10 +78,7 @@ export default function DogsitterSheet() {
   })
   const mealFoods = feedingPlan.filter((item) => !isTreat(item))
   const treatFoods = feedingPlan.filter(isTreat)
-  const mealSessions = [
-    { label: 'Morning', which: 'breakfast', gramsKey: 'breakfastGrams' },
-    { label: 'Evening', which: 'dinner', gramsKey: 'dinnerGrams' },
-  ].map((meal) => ({
+  const mealSessions = resolveMealSessions(activeDog.mealsPerDay).map((meal) => ({
     ...meal,
     totalGrams: mealFoods.reduce(
       (sum, item) => sum + (Number(item.servings[meal.gramsKey]) || 0),
@@ -138,15 +135,15 @@ export default function DogsitterSheet() {
           </h3>
           {feedingPlan.length === 0 ? (
             <p className="mt-2 text-sm text-slate-500">
-              No bowl plan yet — set portions on the Bowl tab (or primary food on
-              Pup).
+              No bowl plan yet — add foods in the Pantry, then set portions on
+              the Bowl tab.
             </p>
           ) : (
             <div className="mt-3 space-y-3">
               {mealFoods.length > 0
                 ? mealSessions.map((meal) => (
                     <div
-                      key={meal.which}
+                      key={meal.id}
                       className="rounded-2xl border border-amber-100 p-3"
                     >
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -155,7 +152,7 @@ export default function DogsitterSheet() {
                       <ul className="mt-2 space-y-2">
                         {mealFoods.map((item) => (
                           <li
-                            key={`${meal.which}-${item.food.id}`}
+                            key={`${meal.id}-${item.food.id}`}
                             className="rounded-xl bg-[#FBF9F5] px-3 py-2 print:bg-slate-50"
                           >
                             <p className="font-bold text-slate-800">
@@ -167,7 +164,7 @@ export default function DogsitterSheet() {
                               </p>
                             ) : null}
                             <p className="mt-1 text-sm font-bold text-slate-800">
-                              {formatMealParts(item.servings, meal.which)}
+                              {formatMealParts(item.servings, meal)}
                             </p>
                           </li>
                         ))}
@@ -183,7 +180,7 @@ export default function DogsitterSheet() {
               {treatFoods.length > 0 ? (
                 <div className="rounded-2xl border border-amber-100 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Treats
+                    Daily Treats
                   </p>
                   <ul className="mt-2 space-y-2">
                     {treatFoods.map((item) => (

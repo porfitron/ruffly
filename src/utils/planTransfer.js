@@ -45,6 +45,11 @@ function toCompact(state) {
       dog.activityLevel ?? 'neutered_adult',
       trimCareInfo(dog.careInfo),
       dog.primaryFood && typeof dog.primaryFood === 'object' ? dog.primaryFood : null,
+      dog.calorieMode === 'manual' ? 'manual' : 'calculator',
+      dog.calorieMode === 'manual' && Number(dog.manualTargetKcal) > 0
+        ? Math.round(Number(dog.manualTargetKcal))
+        : null,
+      Number(dog.mealsPerDay) === 1 ? 1 : 2,
     ]),
     p: (state.pantry ?? []).map((food) => [
       food.id,
@@ -54,6 +59,7 @@ function toCompact(state) {
       food.kcalPerKg ?? null,
       food.kcalPerCup ?? null,
       food.kcalPerCan ?? null,
+      food.flavor || null,
       // productUrl omitted — long URLs make QRs unscannable
     ]),
     m: (state.currentMealPlan ?? []).map((item) => [
@@ -86,6 +92,11 @@ function fromCompact(compact) {
         activityLevel: row[6],
         ...(row[7] ? { careInfo: row[7] } : {}),
         ...(row[8] ? { primaryFood: row[8] } : {}),
+        calorieMode: row[9] === 'manual' ? 'manual' : 'calculator',
+        ...(row[9] === 'manual' && row[10] != null
+          ? { manualTargetKcal: Number(row[10]) }
+          : {}),
+        mealsPerDay: Number(row[11]) === 1 ? 1 : 2,
       })),
       pantry: compact.p.map((row) => ({
         id: row[0],
@@ -95,6 +106,7 @@ function fromCompact(compact) {
         ...(row[4] != null ? { kcalPerKg: row[4] } : {}),
         ...(row[5] != null ? { kcalPerCup: row[5] } : {}),
         ...(row[6] != null ? { kcalPerCan: row[6] } : {}),
+        ...(row[7] ? { flavor: row[7] } : {}),
       })),
       currentMealPlan: (compact.m ?? []).map((row) => ({
         foodId: row[0],

@@ -10,6 +10,31 @@ const rootDir = dirname(fileURLToPath(import.meta.url))
 const base = '/'
 const appPath = '/web/'
 
+/** Serve public/preview/index.html for /preview and /preview/ (Vite SPA fallback otherwise). */
+function previewDirectoryIndex() {
+  const rewrite = (req) => {
+    const url = req.url?.split('?')[0]
+    if (url === '/preview' || url === '/preview/') {
+      req.url = '/preview/index.html'
+    }
+  }
+  return {
+    name: 'preview-directory-index',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        rewrite(req)
+        next()
+      })
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        rewrite(req)
+        next()
+      })
+    },
+  }
+}
+
 /** GitHub Pages serves 404.html for unknown paths — copy SPA shell so client routes work. */
 function spaFallback() {
   return {
@@ -27,6 +52,7 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    previewDirectoryIndex(),
     spaFallback(),
     VitePWA({
       registerType: 'autoUpdate',

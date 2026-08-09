@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
 import { getCategoryLabel } from '../../utils/calculations'
 
-/** Percentage slider for one pantry item in the bowl */
+/** Percentage slider for one pantry item in the daily mix */
 export default function PortionSlider({
   food,
   percentage,
@@ -16,7 +16,7 @@ export default function PortionSlider({
         <div>
           <p className="font-semibold text-slate-800">{food.name}</p>
           <p className="text-xs text-slate-500">
-            {getCategoryLabel(food.category)} · {Math.round(allocatedKcal)} kcal
+            {getCategoryLabel(food.category)} · {Math.round(allocatedKcal)} kcal/day
           </p>
         </div>
         <button
@@ -45,21 +45,13 @@ export default function PortionSlider({
         </div>
       </div>
 
-      <div className="mt-3 space-y-2 text-xs">
-        <ServingChip
-          label="Full day"
-          parts={dailyParts(servings)}
-        />
-        <div className="grid grid-cols-2 gap-2">
-          <ServingChip
-            label="Breakfast"
-            parts={halfParts(servings, 'breakfast')}
-          />
-          <ServingChip
-            label="Dinner"
-            parts={halfParts(servings, 'dinner')}
-          />
-        </div>
+      <div className="mt-3 rounded-xl bg-white px-3 py-2 text-xs">
+        <p className="font-semibold uppercase tracking-wide text-slate-400">
+          Full day
+        </p>
+        <p className="mt-0.5 font-semibold text-slate-700">
+          {dailyParts(servings).join(' · ')}
+        </p>
       </div>
     </div>
   )
@@ -71,29 +63,4 @@ function dailyParts(servings) {
   if (servings.cups) parts.push(`${servings.cups} cups`)
   if (servings.cans) parts.push(`${servings.cans} cans`)
   return parts.length ? parts : ['Add kcal density on this food']
-}
-
-function halfParts(servings, which) {
-  const parts = []
-  if (which === 'breakfast') {
-    if (servings.breakfastGrams) parts.push(`${servings.breakfastGrams} g`)
-    if (servings.breakfastCups) parts.push(`${servings.breakfastCups} cups`)
-    if (servings.breakfastCans) parts.push(`${servings.breakfastCans} cans`)
-  } else {
-    if (servings.dinnerGrams) parts.push(`${servings.dinnerGrams} g`)
-    if (servings.dinnerCups) parts.push(`${servings.dinnerCups} cups`)
-    if (servings.dinnerCans) parts.push(`${servings.dinnerCans} cans`)
-  }
-  return parts.length ? parts : ['—']
-}
-
-function ServingChip({ label, parts }) {
-  return (
-    <div className="rounded-xl bg-white px-3 py-2">
-      <p className="font-semibold uppercase tracking-wide text-slate-400">
-        {label}
-      </p>
-      <p className="mt-0.5 font-semibold text-slate-700">{parts.join(' · ')}</p>
-    </div>
-  )
 }

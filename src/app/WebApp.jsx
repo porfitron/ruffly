@@ -56,7 +56,10 @@ export default function WebApp() {
         {activeTab === 'profile' && (
           <>
             <ProfileEditor />
-            <PortionCalculator />
+            <PortionCalculator
+              onGoToPantry={() => setActiveTab('pantry')}
+              onGoToBowl={() => setActiveTab('bowl')}
+            />
             {activeDog ? <ProTeaserModal /> : null}
           </>
         )}

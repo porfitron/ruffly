@@ -6,8 +6,9 @@ import { useApp } from '../../context/AppContext'
 import { FOOD_CATEGORIES } from '../../utils/calculations'
 
 const EMPTY = {
-  name: '',
   brand: '',
+  name: '',
+  flavor: '',
   category: 'kibble',
   kcalPerKg: '',
   kcalPerCup: '',
@@ -18,8 +19,9 @@ const EMPTY = {
 function foodToForm(food) {
   if (!food) return EMPTY
   return {
-    name: food.name ?? '',
     brand: food.brand ?? '',
+    name: food.name ?? '',
+    flavor: food.flavor ?? '',
     category: food.category ?? 'kibble',
     kcalPerKg: food.kcalPerKg?.toString() ?? '',
     kcalPerCup: food.kcalPerCup?.toString() ?? '',
@@ -34,21 +36,25 @@ function toNumberOrNull(value) {
 }
 
 /** P2 — Add / edit pantry food */
-export default function FoodItemForm({ editingFood = null, onDone }) {
+export default function FoodItemForm({
+  editingFood = null,
+  onDone,
+  embedded = false,
+}) {
   const { pantry, dispatch, createId } = useApp()
   const [form, setForm] = useState(() => foodToForm(editingFood))
   const [expanded, setExpanded] = useState(
-    () => Boolean(editingFood) || pantry.length === 0,
+    () => embedded || Boolean(editingFood) || pantry.length === 0,
   )
 
   useEffect(() => {
     setForm(foodToForm(editingFood))
-    if (editingFood) {
+    if (embedded || editingFood) {
       setExpanded(true)
     } else {
       setExpanded(pantry.length === 0)
     }
-  }, [editingFood?.id, pantry.length])
+  }, [editingFood?.id, pantry.length, embedded])
 
   const hasDensity =
     toNumberOrNull(form.kcalPerKg) ||
@@ -57,6 +63,7 @@ export default function FoodItemForm({ editingFood = null, onDone }) {
 
   const canSave = form.name.trim().length > 0 && hasDensity
   const isEditing = Boolean(editingFood)
+  const fieldId = editingFood?.id ?? 'new'
 
   function update(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -68,8 +75,9 @@ export default function FoodItemForm({ editingFood = null, onDone }) {
 
     const food = {
       id: editingFood?.id ?? createId('food'),
-      name: form.name.trim(),
       brand: form.brand.trim(),
+      name: form.name.trim(),
+      flavor: form.flavor.trim(),
       category: form.category,
       kcalPerKg: toNumberOrNull(form.kcalPerKg),
       kcalPerCup: toNumberOrNull(form.kcalPerCup),
@@ -79,17 +87,17 @@ export default function FoodItemForm({ editingFood = null, onDone }) {
 
     dispatch({ type: 'UPSERT_FOOD', payload: food })
     setForm(EMPTY)
-    setExpanded(false)
+    if (!embedded) setExpanded(false)
     onDone?.()
   }
 
   function handleCancel() {
     setForm(EMPTY)
-    setExpanded(pantry.length === 0)
+    if (!embedded) setExpanded(pantry.length === 0)
     onDone?.()
   }
 
-  if (!expanded) {
+  if (!embedded && !expanded) {
     return (
       <Card>
         <button
@@ -121,8 +129,8 @@ export default function FoodItemForm({ editingFood = null, onDone }) {
     )
   }
 
-  return (
-    <Card>
+  const body = (
+    <>
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-bold text-slate-800">
@@ -133,16 +141,13 @@ export default function FoodItemForm({ editingFood = null, onDone }) {
             precisely.
           </p>
         </div>
-        {!isEditing && pantry.length > 0 ? (
+        {isEditing || (!isEditing && pantry.length > 0) ? (
           <button
             type="button"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl font-light leading-none text-slate-500 hover:bg-slate-200"
-            onClick={() => {
-              setForm(EMPTY)
-              setExpanded(false)
-            }}
+            onClick={handleCancel}
             aria-expanded={true}
-            aria-label="Collapse add food"
+            aria-label={isEditing ? 'Cancel edit' : 'Collapse add food'}
           >
             −
           </button>
@@ -150,9 +155,19 @@ export default function FoodItemForm({ editingFood = null, onDone }) {
       </div>
 
       <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
-        <Field label="Name" htmlFor="food-name">
+        <Field label="Brand" htmlFor={`food-brand-${fieldId}`}>
           <input
-            id="food-name"
+            id={`food-brand-${fieldId}`}
+            className={fieldClassName}
+            value={form.brand}
+            onChange={(e) => update('brand', e.target.value)}
+            placeholder="Orijen"
+          />
+        </Field>
+
+        <Field label="Formula" htmlFor={`food-name-${fieldId}`}>
+          <input
+            id={`food-name-${fieldId}`}
             className={fieldClassName}
             value={form.name}
             onChange={(e) => update('name', e.target.value)}
@@ -161,19 +176,19 @@ export default function FoodItemForm({ editingFood = null, onDone }) {
           />
         </Field>
 
-        <Field label="Brand" htmlFor="food-brand">
+        <Field label="Flavor" htmlFor={`food-flavor-${fieldId}`}>
           <input
-            id="food-brand"
+            id={`food-flavor-${fieldId}`}
             className={fieldClassName}
-            value={form.brand}
-            onChange={(e) => update('brand', e.target.value)}
-            placeholder="Orijen"
+            value={form.flavor}
+            onChange={(e) => update('flavor', e.target.value)}
+            placeholder="Chicken"
           />
         </Field>
 
-        <Field label="Category" htmlFor="food-category">
+        <Field label="Category" htmlFor={`food-category-${fieldId}`}>
           <select
-            id="food-category"
+            id={`food-category-${fieldId}`}
             className={fieldClassName}
             value={form.category}
             onChange={(e) => update('category', e.target.value)}
@@ -187,9 +202,13 @@ export default function FoodItemForm({ editingFood = null, onDone }) {
         </Field>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Field label="kcal / kg" htmlFor="food-kg" hint="Best for grams">
+          <Field
+            label="kcal / kg"
+            htmlFor={`food-kg-${fieldId}`}
+            hint="Best for grams"
+          >
             <input
-              id="food-kg"
+              id={`food-kg-${fieldId}`}
               className={fieldClassName}
               type="number"
               min="1"
@@ -200,9 +219,9 @@ export default function FoodItemForm({ editingFood = null, onDone }) {
               placeholder="3940"
             />
           </Field>
-          <Field label="kcal / cup" htmlFor="food-cup">
+          <Field label="kcal / cup" htmlFor={`food-cup-${fieldId}`}>
             <input
-              id="food-cup"
+              id={`food-cup-${fieldId}`}
               className={fieldClassName}
               type="number"
               min="1"
@@ -213,9 +232,9 @@ export default function FoodItemForm({ editingFood = null, onDone }) {
               placeholder="473"
             />
           </Field>
-          <Field label="kcal / can" htmlFor="food-can">
+          <Field label="kcal / can" htmlFor={`food-can-${fieldId}`}>
             <input
-              id="food-can"
+              id={`food-can-${fieldId}`}
               className={fieldClassName}
               type="number"
               min="1"
@@ -230,11 +249,11 @@ export default function FoodItemForm({ editingFood = null, onDone }) {
 
         <Field
           label="Reorder URL"
-          htmlFor="food-url"
+          htmlFor={`food-url-${fieldId}`}
           hint="Chewy, Amazon, brand site…"
         >
           <input
-            id="food-url"
+            id={`food-url-${fieldId}`}
             className={fieldClassName}
             type="url"
             value={form.productUrl}
@@ -259,6 +278,9 @@ export default function FoodItemForm({ editingFood = null, onDone }) {
           </Button>
         </div>
       </form>
-    </Card>
+    </>
   )
+
+  if (embedded) return body
+  return <Card>{body}</Card>
 }

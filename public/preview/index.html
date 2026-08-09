@@ -108,7 +108,7 @@
 		<h3>Edge-2-Edge Display Simulator</h3>
 		<div>
 			<p>App URL</p>
-			<input id="app-url" type="url" spellcheck="false" placeholder="/" onchange="EdgeSq.setAppUrl(this.value);">
+			<input id="app-url" type="url" spellcheck="false" placeholder="/web/" onchange="EdgeSq.setAppUrl(this.value);">
 		</div>
 		<div>
 			<p>Device</p>
@@ -233,7 +233,7 @@
 			</div>
 		</div>
 		<!-- APP -->
-		<iframe id="app" src="/" title="Ruffly Preview" allow="geolocation;microphone"></iframe>
+		<iframe id="app" src="/web/" title="Ruffly Preview" allow="geolocation;microphone"></iframe>
 		<!-- NAVIGATION BARS -->
 		<div id="nav-bar">
 			<!-- Default Android on-screen navigation bar -->
@@ -376,7 +376,7 @@
 			EdgeSq.setAppUrl = function(url){
 				document.getElementById('app-url').value = url;
 				document.getElementById('app').src = url;
-				localStorage.setItem('edge-sq-app-url', url);
+				localStorage.setItem('ruffly-edge-sq-app-url', url);
 			}
 			
 			EdgeSq.setStatusBarBackground = function(color){
@@ -565,8 +565,8 @@
 			
 			//initialize
 			
-			// Prefer Ruffly at site root; absolute path avoids nesting /preview into itself
-			EdgeSq.setAppUrl(localStorage.getItem('edge-sq-app-url') || (window.location.origin + "/"));
+			// Load the web app (not marketing "/"); new key avoids stale "/" from older previews
+			EdgeSq.setAppUrl(localStorage.getItem('ruffly-edge-sq-app-url') || (window.location.origin + "/web/"));
 			EdgeSq.setDevice(EdgeSq.activeDevice);
 			EdgeSq.setStatusBarBackground(EdgeSq.activeSbBackground);
 			EdgeSq.setStatusBarColor(EdgeSq.activeSbColor);

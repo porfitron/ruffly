@@ -9,15 +9,33 @@ import {
 const AppContext = createContext(null)
 
 function enrichDog(dog) {
+  const calculatedRER = calculateRER(dog.weight, dog.weightUnit)
+  const calorieMode = dog.calorieMode === 'manual' ? 'manual' : 'calculator'
+  const manualTarget = Number(dog.manualTargetKcal)
+  const mealsPerDay = Number(dog.mealsPerDay) === 1 ? 1 : 2
+
+  if (calorieMode === 'manual' && Number.isFinite(manualTarget) && manualTarget > 0) {
+    return {
+      ...dog,
+      calorieMode,
+      mealsPerDay,
+      careInfo: { ...EMPTY_CARE_INFO, ...(dog.careInfo ?? {}) },
+      activityMultiplier: null,
+      calculatedRER,
+      targetDER: Math.round(manualTarget),
+    }
+  }
+
   const multiplier = resolveGoalMultiplier(
     dog.goal,
     dog.activityLevel,
     dog.goalIntensity,
   )
-  const calculatedRER = calculateRER(dog.weight, dog.weightUnit)
   const targetDER = calculateDER(calculatedRER, multiplier)
   return {
     ...dog,
+    calorieMode: 'calculator',
+    mealsPerDay,
     careInfo: { ...EMPTY_CARE_INFO, ...(dog.careInfo ?? {}) },
     activityMultiplier: multiplier,
     calculatedRER,

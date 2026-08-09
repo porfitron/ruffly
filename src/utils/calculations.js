@@ -44,11 +44,29 @@ export function getCategoryLabel(category) {
 
 /**
  * Resolve gram/cup/can servings for a food given allocated kcal.
+ * Split across mealsPerDay (1 = daily bowl, 2 = morning + evening).
  */
-export function resolveFoodServings(food, targetKcal) {
+export function resolveFoodServings(food, targetKcal, mealsPerDay = 2) {
   const grams = calculateServingGrams(targetKcal, food.kcalPerKg)
   const cups = calculateServingCups(targetKcal, food.kcalPerCup)
   const cans = calculateServingCans(targetKcal, food.kcalPerCan)
+  const meals = Number(mealsPerDay) === 1 ? 1 : 2
+
+  if (meals === 1) {
+    return {
+      kcal: Math.round(targetKcal),
+      grams,
+      cups,
+      cans,
+      breakfastGrams: grams,
+      dinnerGrams: 0,
+      breakfastCups: cups,
+      dinnerCups: 0,
+      breakfastCans: cans,
+      dinnerCans: 0,
+    }
+  }
+
   return {
     kcal: Math.round(targetKcal),
     grams,
@@ -63,10 +81,47 @@ export function resolveFoodServings(food, targetKcal) {
   }
 }
 
+/** Meal-time bowl sections for display (Daily vs Morning/Evening). */
+export function resolveMealSessions(mealsPerDay = 2) {
+  if (Number(mealsPerDay) === 1) {
+    return [
+      {
+        id: 'daily',
+        label: 'Daily Bowl',
+        which: 'daily',
+        gramsKey: 'grams',
+        cupsKey: 'cups',
+        cansKey: 'cans',
+        share: 1,
+      },
+    ]
+  }
+  return [
+    {
+      id: 'morning',
+      label: 'Morning Bowl',
+      which: 'breakfast',
+      gramsKey: 'breakfastGrams',
+      cupsKey: 'breakfastCups',
+      cansKey: 'breakfastCans',
+      share: 0.5,
+    },
+    {
+      id: 'evening',
+      label: 'Evening Bowl',
+      which: 'dinner',
+      gramsKey: 'dinnerGrams',
+      cupsKey: 'dinnerCups',
+      cansKey: 'dinnerCans',
+      share: 0.5,
+    },
+  ]
+}
+
 /**
  * Build enriched meal-plan rows for the bowl balancer.
  */
-export function buildMealBreakdown(mealPlan, pantry, dailyDer) {
+export function buildMealBreakdown(mealPlan, pantry, dailyDer, mealsPerDay = 2) {
   return mealPlan
     .map((item) => {
       const food = pantry.find((f) => f.id === item.foodId)
@@ -76,7 +131,7 @@ export function buildMealBreakdown(mealPlan, pantry, dailyDer) {
         ...item,
         food,
         allocatedKcal,
-        servings: resolveFoodServings(food, allocatedKcal),
+        servings: resolveFoodServings(food, allocatedKcal, mealsPerDay),
       }
     })
     .filter(Boolean)
@@ -165,7 +220,8 @@ export function resolvePackDays(days, bufferMode = 'plus1') {
  */
 export function resolveActiveFeedingPlan(activeDog, pantry, mealPlan) {
   const der = activeDog?.targetDER ?? 0
-  const breakdown = buildMealBreakdown(mealPlan, pantry, der)
+  const mealsPerDay = Number(activeDog?.mealsPerDay) === 1 ? 1 : 2
+  const breakdown = buildMealBreakdown(mealPlan, pantry, der, mealsPerDay)
   if (breakdown.length > 0) return breakdown
 
   const primary = activeDog?.primaryFood
@@ -188,6 +244,7 @@ export function resolveActiveFeedingPlan(activeDog, pantry, mealPlan) {
     [{ foodId: '__primary__', percentage: 100 }],
     [syntheticFood],
     der,
+    mealsPerDay,
   )
 }
 

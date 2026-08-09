@@ -8,15 +8,11 @@ export default function PantryTab() {
   return (
     <>
       <PantryList
-        onEdit={(food) => {
-          setEditingFood(food)
-          window.scrollTo({ top: 0, behavior: 'smooth' })
-        }}
-      />
-      <FoodItemForm
         editingFood={editingFood}
+        onEdit={setEditingFood}
         onDone={() => setEditingFood(null)}
       />
+      <FoodItemForm />
     </>
   )
 }
