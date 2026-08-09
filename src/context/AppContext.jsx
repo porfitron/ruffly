@@ -109,6 +109,22 @@ function reducer(state, action) {
     }
     case 'SET_ACTIVE_DOG':
       return { ...state, activeDogId: action.payload }
+    case 'REMOVE_DOG': {
+      const dogId = action.payload
+      const dogs = state.dogs.filter((d) => d.id !== dogId)
+      const { [dogId]: _removed, ...mealPlansByDogId } =
+        state.mealPlansByDogId ?? {}
+      const activeDogId =
+        state.activeDogId === dogId
+          ? (dogs[0]?.id ?? null)
+          : state.activeDogId
+      return {
+        ...state,
+        dogs,
+        mealPlansByDogId,
+        activeDogId,
+      }
+    }
     case 'UPSERT_FOOD': {
       const food = action.payload
       const exists = state.pantry.some((f) => f.id === food.id)

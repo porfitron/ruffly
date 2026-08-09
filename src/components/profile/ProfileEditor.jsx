@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
+import Modal from '../ui/Modal'
 import { Field, SegmentedControl, fieldClassName } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
 import {
@@ -76,6 +77,7 @@ export default function ProfileEditor({
     editingDog ? dogToForm(editingDog) : EMPTY_FORM,
   )
   const [savedFlash, setSavedFlash] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
 
   useEffect(() => {
     setForm(editingDog ? dogToForm(editingDog) : EMPTY_FORM)
@@ -143,11 +145,19 @@ export default function ProfileEditor({
     window.setTimeout(() => setSavedFlash(false), 1600)
   }
 
+  function handleRemove() {
+    if (!editingDog) return
+    dispatch({ type: 'REMOVE_DOG', payload: editingDog.id })
+    setConfirmRemove(false)
+    onCancel?.()
+  }
+
   const title = addingNew
     ? 'New pup'
     : editingDog
       ? 'Edit profile'
       : 'Meet your pup'
+  const dogLabel = editingDog?.name?.trim() || 'this pup'
 
   return (
     <Card className="!p-4">
@@ -281,7 +291,44 @@ export default function ProfileEditor({
                 ? 'Save changes'
                 : 'Save pup profile'}
         </Button>
+
+        {editingDog && !addingNew ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full !h-11 text-red-500 hover:bg-red-50 hover:text-red-600"
+            onClick={() => setConfirmRemove(true)}
+          >
+            Remove dog
+          </Button>
+        ) : null}
       </form>
+
+      <Modal
+        open={confirmRemove}
+        title="Remove dog?"
+        onClose={() => setConfirmRemove(false)}
+      >
+        <p className="text-sm text-slate-500">
+          Remove {dogLabel} and their bowl plan from this device? Pantry foods
+          stay. This cannot be undone.
+        </p>
+        <div className="mt-4 flex flex-col gap-2">
+          <Button
+            className="w-full !h-11 !bg-red-500 hover:!bg-red-600"
+            onClick={handleRemove}
+          >
+            Remove {dogLabel}
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full !h-11"
+            onClick={() => setConfirmRemove(false)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </Modal>
     </Card>
   )
 }
