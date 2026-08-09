@@ -47,6 +47,23 @@ function previewFromForm(form) {
   return { rer, der, multiplier }
 }
 
+function Avatar({ name, size = 'lg' }) {
+  const initial = name.trim() ? name.trim().charAt(0).toUpperCase() : '?'
+  const sizeClass =
+    size === 'sm'
+      ? 'h-12 w-12 text-lg rounded-2xl'
+      : 'h-16 w-16 text-2xl rounded-3xl'
+
+  return (
+    <div
+      className={`flex shrink-0 items-center justify-center bg-amber-100 font-extrabold text-[#F59E0B] ${sizeClass}`}
+      aria-hidden
+    >
+      {initial}
+    </div>
+  )
+}
+
 /** P1 — Dog profile setup with live RER/DER */
 export default function ProfileEditor() {
   const { activeDog, dispatch, createId } = useApp()
@@ -54,9 +71,11 @@ export default function ProfileEditor() {
     activeDog ? dogToForm(activeDog) : EMPTY_FORM,
   )
   const [savedFlash, setSavedFlash] = useState(false)
+  const [expanded, setExpanded] = useState(() => !activeDog)
 
   useEffect(() => {
     setForm(activeDog ? dogToForm(activeDog) : EMPTY_FORM)
+    setExpanded(!activeDog)
   }, [activeDog?.id])
 
   const preview = previewFromForm(form)
@@ -64,6 +83,8 @@ export default function ProfileEditor() {
     form.name.trim().length > 0 &&
     Number(form.weight) > 0 &&
     Number.isFinite(Number(form.weight))
+  const isComplete = Boolean(activeDog)
+  const displayName = activeDog?.name || form.name.trim() || 'Your pup'
 
   function update(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -88,22 +109,48 @@ export default function ProfileEditor() {
       },
     })
     setSavedFlash(true)
+    setExpanded(false)
     window.setTimeout(() => setSavedFlash(false), 1600)
   }
 
   const intensityOptions =
     form.goal === 'loss' ? LOSS_INTENSITY_OPTIONS : GAIN_INTENSITY_OPTIONS
 
+  if (isComplete && !expanded) {
+    return (
+      <Card>
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 text-left"
+          onClick={() => setExpanded(true)}
+          aria-expanded={false}
+        >
+          <Avatar name={displayName} size="sm" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Pup profile
+            </p>
+            <p className="truncate text-lg font-bold text-slate-800">
+              {displayName}
+            </p>
+          </div>
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-2xl font-light leading-none text-[#F59E0B]"
+            aria-hidden
+          >
+            +
+          </span>
+          <span className="sr-only">Expand to edit</span>
+        </button>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <div className="flex items-start gap-4">
-        <div
-          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-amber-100 text-2xl font-extrabold text-[#F59E0B]"
-          aria-hidden
-        >
-          {form.name.trim() ? form.name.trim().charAt(0).toUpperCase() : '?'}
-        </div>
-        <div>
+        <Avatar name={form.name} />
+        <div className="min-w-0 flex-1">
           <h2 className="text-xl font-bold text-slate-800">
             {activeDog ? 'Edit pup profile' : 'Meet your pup'}
           </h2>
@@ -112,6 +159,17 @@ export default function ProfileEditor() {
             and life stage.
           </p>
         </div>
+        {isComplete ? (
+          <button
+            type="button"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl font-light leading-none text-slate-500 hover:bg-slate-200"
+            onClick={() => setExpanded(false)}
+            aria-expanded={true}
+            aria-label="Collapse pup profile"
+          >
+            −
+          </button>
+        ) : null}
       </div>
 
       <form className="mt-5 space-y-4" onSubmit={handleSave}>

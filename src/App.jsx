@@ -22,6 +22,14 @@ export default function App() {
   const [menuDialog, setMenuDialog] = useState(null)
   const { activeDog } = useApp()
 
+  function handleTabChange(id) {
+    if (id === activeTab) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+    setActiveTab(id)
+  }
+
   const menuItems = [
     { id: 'share', label: 'Share Plan', onClick: () => setMenuDialog('share') },
     {
@@ -68,7 +76,7 @@ export default function App() {
       </main>
 
       <div className="print:hidden">
-        <Navigation activeTab={activeTab} onChange={setActiveTab} />
+        <Navigation activeTab={activeTab} onChange={handleTabChange} />
       </div>
 
       <MenuDialogs dialog={menuDialog} onClose={() => setMenuDialog(null)} />

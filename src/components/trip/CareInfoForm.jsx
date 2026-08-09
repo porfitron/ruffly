@@ -5,17 +5,41 @@ import { Field, fieldClassName } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
 import { EMPTY_CARE_INFO } from '../../utils/storage'
 
+function careInfoHasContent(careInfo) {
+  if (!careInfo) return false
+  return Object.values(careInfo).some(
+    (value) => typeof value === 'string' && value.trim().length > 0,
+  )
+}
+
+function careSummary(careInfo) {
+  if (!careInfo) return null
+  const bits = []
+  if (careInfo.ownerName?.trim()) bits.push(careInfo.ownerName.trim())
+  if (careInfo.vetName?.trim()) bits.push(careInfo.vetName.trim())
+  if (careInfo.emergencyName?.trim() && bits.length < 2) {
+    bits.push(careInfo.emergencyName.trim())
+  }
+  return bits.length > 0 ? bits.join(' · ') : 'Contacts saved'
+}
+
 /** Emergency / vet details saved on the active dog */
 export default function CareInfoForm() {
   const { activeDog, dispatch } = useApp()
   const [form, setForm] = useState(EMPTY_CARE_INFO)
   const [savedFlash, setSavedFlash] = useState(false)
+  const [expanded, setExpanded] = useState(
+    () => !careInfoHasContent(activeDog?.careInfo),
+  )
 
   useEffect(() => {
     setForm({ ...EMPTY_CARE_INFO, ...(activeDog?.careInfo ?? {}) })
+    setExpanded(!careInfoHasContent(activeDog?.careInfo))
   }, [activeDog?.id])
 
   if (!activeDog) return null
+
+  const isComplete = careInfoHasContent(activeDog.careInfo)
 
   function update(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -25,15 +49,65 @@ export default function CareInfoForm() {
     e.preventDefault()
     dispatch({ type: 'UPDATE_CARE_INFO', payload: form })
     setSavedFlash(true)
+    if (careInfoHasContent(form)) {
+      setExpanded(false)
+    }
     window.setTimeout(() => setSavedFlash(false), 1600)
+  }
+
+  if (isComplete && !expanded) {
+    return (
+      <Card className="print:hidden">
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 text-left"
+          onClick={() => setExpanded(true)}
+          aria-expanded={false}
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Care contacts
+            </p>
+            <p className="truncate text-lg font-bold text-slate-800">
+              {careSummary(activeDog.careInfo)}
+            </p>
+            <p className="mt-0.5 text-sm text-slate-500">
+              For {activeDog.name}&apos;s dogsitter sheet
+            </p>
+          </div>
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-2xl font-light leading-none text-[#F59E0B]"
+            aria-hidden
+          >
+            +
+          </span>
+          <span className="sr-only">Expand to edit</span>
+        </button>
+      </Card>
+    )
   }
 
   return (
     <Card className="print:hidden">
-      <h2 className="text-lg font-bold text-slate-800">Care contacts</h2>
-      <p className="mt-1 text-sm text-slate-500">
-        These print on the dogsitter sheet for {activeDog.name}.
-      </p>
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-bold text-slate-800">Care contacts</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            These print on the dogsitter sheet for {activeDog.name}.
+          </p>
+        </div>
+        {isComplete ? (
+          <button
+            type="button"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl font-light leading-none text-slate-500 hover:bg-slate-200"
+            onClick={() => setExpanded(false)}
+            aria-expanded={true}
+            aria-label="Collapse care contacts"
+          >
+            −
+          </button>
+        ) : null}
+      </div>
 
       <form className="mt-4 space-y-3" onSubmit={handleSave}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

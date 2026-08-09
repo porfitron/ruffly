@@ -30,9 +30,11 @@ export default function PortionCalculator() {
   const { activeDog, dispatch } = useApp()
   const [form, setForm] = useState(() => foodToForm(activeDog?.primaryFood))
   const [savedFlash, setSavedFlash] = useState(false)
+  const [expanded, setExpanded] = useState(() => !activeDog?.primaryFood)
 
   useEffect(() => {
     setForm(foodToForm(activeDog?.primaryFood))
+    setExpanded(!activeDog?.primaryFood)
   }, [activeDog?.id, activeDog?.primaryFood?.name])
 
   if (!activeDog) return null
@@ -55,6 +57,11 @@ export default function PortionCalculator() {
   const canSave =
     (form.densityMode === 'kcalPerKg' && kcalPerKg > 0) ||
     (form.densityMode === 'kcalPerCup' && kcalPerCup > 0)
+  const isComplete = Boolean(activeDog.primaryFood)
+  const foodName = activeDog.primaryFood?.name || form.name.trim() || 'Primary food'
+  const summaryParts = []
+  if (hasGrams) summaryParts.push(`${dailyGrams} g/day`)
+  if (hasCups) summaryParts.push(`${dailyCups} cups/day`)
 
   function update(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -76,17 +83,67 @@ export default function PortionCalculator() {
       },
     })
     setSavedFlash(true)
+    setExpanded(false)
     window.setTimeout(() => setSavedFlash(false), 1600)
+  }
+
+  if (isComplete && !expanded) {
+    return (
+      <Card>
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 text-left"
+          onClick={() => setExpanded(true)}
+          aria-expanded={false}
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Daily portion
+            </p>
+            <p className="truncate text-lg font-bold text-slate-800">
+              {foodName}
+            </p>
+            {summaryParts.length > 0 ? (
+              <p className="mt-0.5 text-sm font-semibold text-[#10B981]">
+                {summaryParts.join(' · ')}
+              </p>
+            ) : null}
+          </div>
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-2xl font-light leading-none text-[#F59E0B]"
+            aria-hidden
+          >
+            +
+          </span>
+          <span className="sr-only">Expand to edit</span>
+        </button>
+      </Card>
+    )
   }
 
   return (
     <Card>
-      <h2 className="text-xl font-bold text-slate-800">Daily portion</h2>
-      <p className="mt-1 text-sm text-slate-500">
-        Enter this food&apos;s calorie density to convert{' '}
-        <span className="font-semibold text-[#10B981]">{der} kcal</span> into
-        precise grams.
-      </p>
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl font-bold text-slate-800">Daily portion</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Enter this food&apos;s calorie density to convert{' '}
+            <span className="font-semibold text-[#10B981]">{der} kcal</span>{' '}
+            into precise grams.
+          </p>
+        </div>
+        {isComplete ? (
+          <button
+            type="button"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl font-light leading-none text-slate-500 hover:bg-slate-200"
+            onClick={() => setExpanded(false)}
+            aria-expanded={true}
+            aria-label="Collapse daily portion"
+          >
+            −
+          </button>
+        ) : null}
+      </div>
 
       <form className="mt-5 space-y-4" onSubmit={handleSave}>
         <Field label="Food name" hint="Optional for now — pantry comes in P2">
