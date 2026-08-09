@@ -1,10 +1,22 @@
 import { createContext, useContext, useEffect, useReducer } from 'react'
-import { loadAppData, saveAppData, createId, EMPTY_CARE_INFO } from '../utils/storage'
+import {
+  loadAppData,
+  saveAppData,
+  createId,
+  EMPTY_CARE_INFO,
+  normalizeAppData,
+} from '../utils/storage'
 import {
   calculateDER,
   calculateRER,
   resolveGoalMultiplier,
 } from '../utils/calculations'
+import {
+  findDogByPupParam,
+  pupSearchForState,
+  readPupParam,
+  uniqueDogSlug,
+} from '../utils/dogs'
 
 const AppContext = createContext(null)
 
@@ -43,18 +55,56 @@ function enrichDog(dog) {
   }
 }
 
+function mealPlanFor(state, dogId = state.activeDogId) {
+  if (!dogId) return []
+  return state.mealPlansByDogId?.[dogId] ?? []
+}
+
+function withActiveMealPlan(state, plan) {
+  if (!state.activeDogId) return state
+  return {
+    ...state,
+    mealPlansByDogId: {
+      ...state.mealPlansByDogId,
+      [state.activeDogId]: plan,
+    },
+  }
+}
+
+function stripFoodFromAllPlans(mealPlansByDogId, foodId) {
+  const next = {}
+  for (const [dogId, plan] of Object.entries(mealPlansByDogId ?? {})) {
+    next[dogId] = (plan ?? []).filter((item) => item.foodId !== foodId)
+  }
+  return next
+}
+
 function reducer(state, action) {
   switch (action.type) {
     case 'UPSERT_DOG': {
-      const dog = enrichDog(action.payload)
-      const exists = state.dogs.some((d) => d.id === dog.id)
+      const incoming = action.payload
+      const exists = state.dogs.some((d) => d.id === incoming.id)
+      const previous = exists
+        ? state.dogs.find((d) => d.id === incoming.id)
+        : null
+      // Keep slug stable across renames so ?pup= links keep working.
+      const slug =
+        previous?.slug ||
+        incoming.slug ||
+        uniqueDogSlug(incoming.name, state.dogs, incoming.id)
+      const dog = enrichDog({ ...incoming, slug })
       const dogs = exists
         ? state.dogs.map((d) => (d.id === dog.id ? dog : d))
         : [...state.dogs, dog]
+      const mealPlansByDogId = {
+        ...state.mealPlansByDogId,
+        [dog.id]: state.mealPlansByDogId?.[dog.id] ?? [],
+      }
       return {
         ...state,
         dogs,
-        activeDogId: state.activeDogId ?? dog.id,
+        mealPlansByDogId,
+        activeDogId: dog.id,
       }
     }
     case 'SET_ACTIVE_DOG':
@@ -71,39 +121,40 @@ function reducer(state, action) {
       return {
         ...state,
         pantry: state.pantry.filter((f) => f.id !== action.payload),
-        currentMealPlan: state.currentMealPlan.filter(
-          (item) => item.foodId !== action.payload,
+        mealPlansByDogId: stripFoodFromAllPlans(
+          state.mealPlansByDogId,
+          action.payload,
         ),
       }
     case 'SET_MEAL_PLAN':
-      return { ...state, currentMealPlan: action.payload }
+      return withActiveMealPlan(state, action.payload)
     case 'SET_MEAL_PERCENTAGE': {
       const { foodId, percentage } = action.payload
       const clamped = Math.min(Math.max(Number(percentage) || 0, 0), 100)
-      const exists = state.currentMealPlan.some((item) => item.foodId === foodId)
-      const currentMealPlan = exists
-        ? state.currentMealPlan.map((item) =>
+      const current = mealPlanFor(state)
+      const exists = current.some((item) => item.foodId === foodId)
+      const plan = exists
+        ? current.map((item) =>
             item.foodId === foodId ? { ...item, percentage: clamped } : item,
           )
-        : [...state.currentMealPlan, { foodId, percentage: clamped }]
-      return { ...state, currentMealPlan }
+        : [...current, { foodId, percentage: clamped }]
+      return withActiveMealPlan(state, plan)
     }
     case 'REMOVE_FROM_MEAL':
-      return {
-        ...state,
-        currentMealPlan: state.currentMealPlan.filter(
-          (item) => item.foodId !== action.payload,
-        ),
-      }
+      return withActiveMealPlan(
+        state,
+        mealPlanFor(state).filter((item) => item.foodId !== action.payload),
+      )
     case 'ADD_TO_MEAL': {
       const foodId = action.payload
-      if (state.currentMealPlan.some((item) => item.foodId === foodId)) {
+      const current = mealPlanFor(state)
+      if (current.some((item) => item.foodId === foodId)) {
         return state
       }
-      return {
-        ...state,
-        currentMealPlan: [...state.currentMealPlan, { foodId, percentage: 0 }],
-      }
+      return withActiveMealPlan(state, [
+        ...current,
+        { foodId, percentage: 0 },
+      ])
     }
     case 'MARK_ADD_DOG_TEASER':
       return {
@@ -137,7 +188,7 @@ function reducer(state, action) {
       return { ...state, dogs }
     }
     case 'REPLACE_ALL': {
-      const next = action.payload
+      const next = normalizeAppData(action.payload)
       return {
         ...next,
         dogs: (next.dogs ?? []).map(enrichDog),
@@ -150,10 +201,34 @@ function reducer(state, action) {
 
 function hydrateAppData() {
   const data = loadAppData()
+  const dogs = (data.dogs ?? []).map(enrichDog)
+  const pup = readPupParam()
+  const fromUrl = findDogByPupParam(dogs, pup)
   return {
     ...data,
-    dogs: (data.dogs ?? []).map(enrichDog),
+    dogs,
+    activeDogId: fromUrl?.id ?? data.activeDogId ?? dogs[0]?.id ?? null,
   }
+}
+
+function syncPupUrl(dogs, activeDogId) {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  const params = new URLSearchParams(url.search)
+  const desired = pupSearchForState(dogs, activeDogId)
+
+  if (desired) {
+    const slug = new URLSearchParams(desired).get('pup')
+    params.set('pup', slug)
+  } else {
+    params.delete('pup')
+  }
+
+  const search = params.toString()
+  const next = `${url.pathname}${search ? `?${search}` : ''}${url.hash}`
+  const current = `${url.pathname}${url.search}${url.hash}`
+  if (next === current) return
+  window.history.replaceState(window.history.state, '', next)
 }
 
 export function AppProvider({ children }) {
@@ -163,12 +238,31 @@ export function AppProvider({ children }) {
     saveAppData(state)
   }, [state])
 
+  // Keep ?pup= in sync when there are multiple dogs; strip for a single pup.
+  useEffect(() => {
+    syncPupUrl(state.dogs, state.activeDogId)
+  }, [state.dogs, state.activeDogId])
+
+  useEffect(() => {
+    function onPopState() {
+      const pup = readPupParam()
+      const match = findDogByPupParam(state.dogs, pup)
+      if (match && match.id !== state.activeDogId) {
+        dispatch({ type: 'SET_ACTIVE_DOG', payload: match.id })
+      }
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [state.dogs, state.activeDogId])
+
   const activeDog =
     state.dogs.find((dog) => dog.id === state.activeDogId) ?? null
+  const currentMealPlan = mealPlanFor(state)
 
   const value = {
     ...state,
     activeDog,
+    currentMealPlan,
     dispatch,
     createId,
   }

@@ -15,7 +15,7 @@ function planStateFromApp(app) {
   return {
     dogs: app.dogs,
     pantry: app.pantry,
-    currentMealPlan: app.currentMealPlan,
+    mealPlansByDogId: app.mealPlansByDogId,
     tripSettings: app.tripSettings,
     activeDogId: app.activeDogId,
   }
@@ -50,7 +50,7 @@ function SharePlanDialog({ open, onClose }) {
     return () => {
       cancelled = true
     }
-  }, [open, app.dogs, app.pantry, app.currentMealPlan, app.tripSettings, app.activeDogId])
+  }, [open, app.dogs, app.pantry, app.mealPlansByDogId, app.tripSettings, app.activeDogId])
 
   return (
     <Modal open={open} title="Share Plan" onClose={onClose}>

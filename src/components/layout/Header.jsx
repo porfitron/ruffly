@@ -2,16 +2,25 @@ import { useState } from 'react'
 import { Menu } from 'lucide-react'
 import AppMenu from './AppMenu'
 
-export default function Header({ title = 'Ruffly', subtitle, menuItems = [] }) {
+export default function Header({
+  title = 'Ruffly',
+  subtitle,
+  menuItems = [],
+}) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
     <>
       <header className="print:hidden flex items-start justify-between gap-3 px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))]">
         <div>
-          <p className="text-2xl font-extrabold tracking-tight text-[#F59E0B]">
-            {title}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-2xl font-extrabold tracking-tight text-[#F59E0B]">
+              {title}
+            </p>
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#F59E0B] ring-1 ring-amber-200/80">
+              Free
+            </span>
+          </div>
           {subtitle ? (
             <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>
           ) : null}

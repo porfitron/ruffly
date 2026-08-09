@@ -9,6 +9,7 @@ import {
   calculateRER,
   resolveGoalMultiplier,
 } from '../../utils/calculations'
+import DogAvatar from './DogAvatar'
 
 const CALORIE_MODE_OPTIONS = [
   { value: 'manual', label: 'Manual' },
@@ -63,36 +64,22 @@ function previewFromForm(form) {
   return { rer, der, multiplier }
 }
 
-function Avatar({ name, size = 'lg' }) {
-  const initial = name.trim() ? name.trim().charAt(0).toUpperCase() : '?'
-  const sizeClass =
-    size === 'sm'
-      ? 'h-12 w-12 text-lg rounded-2xl'
-      : 'h-16 w-16 text-2xl rounded-3xl'
-
-  return (
-    <div
-      className={`flex shrink-0 items-center justify-center bg-amber-100 font-extrabold text-[#F59E0B] ${sizeClass}`}
-      aria-hidden
-    >
-      {initial}
-    </div>
-  )
-}
-
-/** P1 — Dog profile setup with live RER/DER */
-export default function ProfileEditor() {
+/** Compact dog profile form — create or edit the active pup. */
+export default function ProfileEditor({
+  addingNew = false,
+  onAdded,
+  onCancel,
+}) {
   const { activeDog, dispatch, createId } = useApp()
+  const editingDog = addingNew ? null : activeDog
   const [form, setForm] = useState(() =>
-    activeDog ? dogToForm(activeDog) : EMPTY_FORM,
+    editingDog ? dogToForm(editingDog) : EMPTY_FORM,
   )
   const [savedFlash, setSavedFlash] = useState(false)
-  const [expanded, setExpanded] = useState(() => !activeDog)
 
   useEffect(() => {
-    setForm(activeDog ? dogToForm(activeDog) : EMPTY_FORM)
-    setExpanded(!activeDog)
-  }, [activeDog?.id])
+    setForm(editingDog ? dogToForm(editingDog) : EMPTY_FORM)
+  }, [editingDog?.id, addingNew])
 
   const preview = previewFromForm(form)
   const manualTarget = Number(form.manualTargetKcal)
@@ -104,8 +91,6 @@ export default function ProfileEditor() {
     Number(form.weight) > 0 &&
     Number.isFinite(Number(form.weight)) &&
     hasManualTarget
-  const isComplete = Boolean(activeDog)
-  const displayName = activeDog?.name || form.name.trim() || 'Your pup'
 
   function update(field, value) {
     setForm((prev) => {
@@ -133,11 +118,12 @@ export default function ProfileEditor() {
     if (!canSave) return
 
     const isManual = form.calorieMode === 'manual'
+    const isNew = addingNew || !editingDog
 
     dispatch({
       type: 'UPSERT_DOG',
       payload: {
-        id: activeDog?.id ?? createId('dog'),
+        id: isNew ? createId('dog') : editingDog.id,
         name: form.name.trim(),
         weight: Number(form.weight),
         weightUnit: form.weightUnit,
@@ -147,73 +133,45 @@ export default function ProfileEditor() {
         goalIntensity: 'moderate',
         activityLevel: form.activityLevel,
         photoUrl: form.photoUrl,
-        primaryFood: activeDog?.primaryFood ?? null,
-        careInfo: activeDog?.careInfo ?? undefined,
-        mealsPerDay: activeDog?.mealsPerDay === 1 ? 1 : 2,
+        primaryFood: isNew ? null : (editingDog?.primaryFood ?? null),
+        careInfo: isNew ? undefined : (editingDog?.careInfo ?? undefined),
+        mealsPerDay: isNew ? 2 : (editingDog?.mealsPerDay === 1 ? 1 : 2),
       },
     })
     setSavedFlash(true)
-    setExpanded(false)
+    onAdded?.()
     window.setTimeout(() => setSavedFlash(false), 1600)
   }
 
-  if (isComplete && !expanded) {
-    return (
-      <Card>
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 text-left"
-          onClick={() => setExpanded(true)}
-          aria-expanded={false}
-        >
-          <Avatar name={displayName} size="sm" />
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Pup profile
-            </p>
-            <p className="truncate text-lg font-bold text-slate-800">
-              {displayName}
-            </p>
-          </div>
-          <span
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-2xl font-light leading-none text-[#F59E0B]"
-            aria-hidden
-          >
-            +
-          </span>
-          <span className="sr-only">Expand to edit</span>
-        </button>
-      </Card>
-    )
-  }
+  const title = addingNew
+    ? 'New pup'
+    : editingDog
+      ? 'Edit profile'
+      : 'Meet your pup'
 
   return (
-    <Card>
-      <div className="flex items-start gap-4">
-        <Avatar name={form.name} />
+    <Card className="!p-4">
+      <div className="flex items-center gap-3">
+        <DogAvatar name={form.name} photoUrl={form.photoUrl} size="md" />
         <div className="min-w-0 flex-1">
-          <h2 className="text-xl font-bold text-slate-800">
-            {activeDog ? 'Edit pup profile' : 'Meet your pup'}
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Set a daily calorie target manually, or calculate it from weight and
-            life stage.
+          <h2 className="text-lg font-bold text-slate-800">{title}</h2>
+          <p className="text-xs text-slate-500">
+            Daily target from weight &amp; life stage, or enter it manually.
           </p>
         </div>
-        {isComplete ? (
+        {onCancel ? (
           <button
             type="button"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl font-light leading-none text-slate-500 hover:bg-slate-200"
-            onClick={() => setExpanded(false)}
-            aria-expanded={true}
-            aria-label="Collapse pup profile"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xl font-light leading-none text-slate-500 hover:bg-slate-200"
+            onClick={onCancel}
+            aria-label="Close editor"
           >
-            −
+            ×
           </button>
         ) : null}
       </div>
 
-      <form className="mt-5 space-y-4" onSubmit={handleSave}>
+      <form className="mt-4 space-y-3" onSubmit={handleSave}>
         <Field label="Name">
           <input
             className={fieldClassName}
@@ -252,7 +210,7 @@ export default function ProfileEditor() {
           </Field>
         </div>
 
-        <Field label="Target Calories per Day">
+        <Field label="Target calories">
           <SegmentedControl
             ariaLabel="Target calories mode"
             value={form.calorieMode}
@@ -262,10 +220,7 @@ export default function ProfileEditor() {
         </Field>
 
         {form.calorieMode === 'manual' ? (
-          <Field
-            label="Daily total target"
-            hint="Enter the total kcal you want to feed per day."
-          >
+          <Field label="Daily total (kcal)">
             <input
               className={fieldClassName}
               type="number"
@@ -294,48 +249,37 @@ export default function ProfileEditor() {
           </Field>
         )}
 
-        <div className="rounded-3xl bg-[#FBF9F5] p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Live estimate
-          </p>
-          <dl className="mt-3 grid grid-cols-2 gap-3">
+        <div className="rounded-2xl bg-[#FBF9F5] px-3 py-3">
+          <dl className="grid grid-cols-2 gap-3">
             <div>
-              <dt className="text-sm text-slate-500">RER</dt>
-              <dd className="text-lg font-extrabold text-slate-800">
+              <dt className="text-xs text-slate-400">RER</dt>
+              <dd className="text-base font-extrabold text-slate-800">
                 {preview.rer || '—'}
-                <span className="ml-1 text-sm font-semibold text-slate-400">
+                <span className="ml-1 text-xs font-semibold text-slate-400">
                   kcal
                 </span>
               </dd>
             </div>
             <div>
-              <dt className="text-sm text-slate-500">Daily target (DER)</dt>
-              <dd className="text-lg font-extrabold text-[#10B981]">
+              <dt className="text-xs text-slate-400">Daily target</dt>
+              <dd className="text-base font-extrabold text-[#10B981]">
                 {preview.der || '—'}
-                <span className="ml-1 text-sm font-semibold text-emerald-400">
+                <span className="ml-1 text-xs font-semibold text-emerald-400">
                   kcal
                 </span>
               </dd>
             </div>
           </dl>
-          {form.calorieMode === 'calculator' && preview.multiplier > 0 ? (
-            <p className="mt-2 text-xs text-slate-400">
-              Using {preview.multiplier}× RER multiplier
-            </p>
-          ) : null}
-          {form.calorieMode === 'manual' && preview.der > 0 ? (
-            <p className="mt-2 text-xs text-slate-400">
-              Using your manual daily target
-            </p>
-          ) : null}
         </div>
 
-        <Button type="submit" className="w-full" disabled={!canSave}>
+        <Button type="submit" className="w-full !h-11" disabled={!canSave}>
           {savedFlash
-            ? 'Saved to this phone'
-            : activeDog
-              ? 'Save changes'
-              : 'Save pup profile'}
+            ? 'Saved'
+            : addingNew
+              ? 'Save new pup'
+              : editingDog
+                ? 'Save changes'
+                : 'Save pup profile'}
         </Button>
       </form>
     </Card>

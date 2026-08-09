@@ -30,10 +30,57 @@ function base64UrlToBytes(encoded) {
   return bytes
 }
 
+function mealPlansToCompact(state) {
+  const byDog = state.mealPlansByDogId
+  if (byDog && typeof byDog === 'object' && Object.keys(byDog).length > 0) {
+    return Object.entries(byDog).map(([dogId, plan]) => [
+      dogId,
+      (plan ?? []).map((item) => [item.foodId, item.percentage ?? 0]),
+    ])
+  }
+
+  // Legacy single plan → wrap under active dog
+  const legacy = state.currentMealPlan ?? []
+  if (!legacy.length) return []
+  const dogId = state.activeDogId ?? state.dogs?.[0]?.id
+  if (!dogId) return []
+  return [[dogId, legacy.map((item) => [item.foodId, item.percentage ?? 0])]]
+}
+
+function mealPlansFromCompact(compact, activeDogId) {
+  // v3+: M = [[dogId, [[foodId, pct], ...]], ...]
+  if (Array.isArray(compact.M)) {
+    const mealPlansByDogId = {}
+    for (const row of compact.M) {
+      const dogId = row?.[0]
+      if (!dogId) continue
+      mealPlansByDogId[dogId] = (row[1] ?? []).map((item) => ({
+        foodId: item[0],
+        percentage: item[1] ?? 0,
+      }))
+    }
+    return mealPlansByDogId
+  }
+
+  // v2: single m plan for active dog
+  if (Array.isArray(compact.m)) {
+    const dogId = activeDogId ?? compact.a ?? compact.d?.[0]?.[0]
+    if (!dogId) return {}
+    return {
+      [dogId]: compact.m.map((row) => ({
+        foodId: row[0],
+        percentage: row[1] ?? 0,
+      })),
+    }
+  }
+
+  return {}
+}
+
 /** Compact array form — shorter than verbose JSON keys. */
 function toCompact(state) {
   return {
-    v: 2,
+    v: 3,
     a: state.activeDogId ?? null,
     d: (state.dogs ?? []).map((dog) => [
       dog.id,
@@ -50,6 +97,7 @@ function toCompact(state) {
         ? Math.round(Number(dog.manualTargetKcal))
         : null,
       Number(dog.mealsPerDay) === 1 ? 1 : 2,
+      dog.slug || null,
     ]),
     p: (state.pantry ?? []).map((food) => [
       food.id,
@@ -62,10 +110,7 @@ function toCompact(state) {
       food.flavor || null,
       // productUrl omitted — long URLs make QRs unscannable
     ]),
-    m: (state.currentMealPlan ?? []).map((item) => [
-      item.foodId,
-      item.percentage ?? 0,
-    ]),
+    M: mealPlansToCompact(state),
     t: [
       state.tripSettings?.days ?? DEFAULT_APP_DATA.tripSettings.days,
       state.tripSettings?.bufferMode ?? DEFAULT_APP_DATA.tripSettings.bufferMode,
@@ -79,9 +124,10 @@ function fromCompact(compact) {
   }
 
   if (Array.isArray(compact.d) && Array.isArray(compact.p)) {
+    const activeDogId = compact.a ?? compact.d[0]?.[0] ?? null
     return {
       ...structuredClone(DEFAULT_APP_DATA),
-      activeDogId: compact.a ?? compact.d[0]?.[0] ?? null,
+      activeDogId,
       dogs: compact.d.map((row) => ({
         id: row[0],
         name: row[1],
@@ -97,6 +143,7 @@ function fromCompact(compact) {
           ? { manualTargetKcal: Number(row[10]) }
           : {}),
         mealsPerDay: Number(row[11]) === 1 ? 1 : 2,
+        ...(row[12] ? { slug: row[12] } : {}),
       })),
       pantry: compact.p.map((row) => ({
         id: row[0],
@@ -108,10 +155,7 @@ function fromCompact(compact) {
         ...(row[6] != null ? { kcalPerCan: row[6] } : {}),
         ...(row[7] ? { flavor: row[7] } : {}),
       })),
-      currentMealPlan: (compact.m ?? []).map((row) => ({
-        foodId: row[0],
-        percentage: row[1],
-      })),
+      mealPlansByDogId: mealPlansFromCompact(compact, activeDogId),
       tripSettings: {
         days: compact.t?.[0] ?? DEFAULT_APP_DATA.tripSettings.days,
         bufferMode: compact.t?.[1] ?? DEFAULT_APP_DATA.tripSettings.bufferMode,
@@ -124,14 +168,25 @@ function fromCompact(compact) {
     throw new Error('That plan is missing dog or pantry data.')
   }
 
+  const activeDogId = compact.activeDogId ?? compact.dogs[0]?.id ?? null
+  let mealPlansByDogId =
+    compact.mealPlansByDogId && typeof compact.mealPlansByDogId === 'object'
+      ? compact.mealPlansByDogId
+      : {}
+  if (
+    Object.keys(mealPlansByDogId).length === 0 &&
+    Array.isArray(compact.currentMealPlan) &&
+    activeDogId
+  ) {
+    mealPlansByDogId = { [activeDogId]: compact.currentMealPlan }
+  }
+
   return {
     ...structuredClone(DEFAULT_APP_DATA),
-    activeDogId: compact.activeDogId ?? compact.dogs[0]?.id ?? null,
+    activeDogId,
     dogs: compact.dogs,
     pantry: compact.pantry,
-    currentMealPlan: Array.isArray(compact.currentMealPlan)
-      ? compact.currentMealPlan
-      : [],
+    mealPlansByDogId,
     tripSettings: {
       ...DEFAULT_APP_DATA.tripSettings,
       ...(compact.tripSettings ?? {}),
@@ -159,13 +214,17 @@ export function encodePlanForQr(state) {
 export function summarizePlan(plan) {
   const dogs = plan.dogs ?? []
   const pantry = plan.pantry ?? []
-  const mealItems = plan.currentMealPlan ?? []
+  const byDog = plan.mealPlansByDogId ?? {}
+  const mealItemCount = Object.values(byDog).reduce(
+    (sum, planItems) => sum + (planItems?.length ?? 0),
+    0,
+  )
   const dogNames = dogs.map((d) => d.name || 'Unnamed').filter(Boolean)
   return {
     dogCount: dogs.length,
     dogNames,
     pantryCount: pantry.length,
-    mealItemCount: mealItems.length,
+    mealItemCount,
   }
 }
 

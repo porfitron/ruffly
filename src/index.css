@@ -35,6 +35,10 @@ body {
     break-inside: avoid;
   }
 
+  .dogsitter-print-page + .dogsitter-print-page {
+    break-before: page;
+  }
+
   a[href^='http']::after {
     content: none;
   }
