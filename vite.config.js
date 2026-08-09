@@ -2,8 +2,24 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { copyFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const base = '/ruffly/'
+const rootDir = dirname(fileURLToPath(import.meta.url))
+const base = '/'
+const appPath = '/web/'
+
+/** GitHub Pages serves 404.html for unknown paths — copy SPA shell so client routes work. */
+function spaFallback() {
+  return {
+    name: 'spa-github-pages-fallback',
+    closeBundle() {
+      const dist = resolve(rootDir, 'dist')
+      copyFileSync(resolve(dist, 'index.html'), resolve(dist, '404.html'))
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -11,8 +27,11 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    spaFallback(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Limit SW control to the web app so marketing pages stay uncached by the shell
+      scope: appPath,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Ruffly',
@@ -23,8 +42,8 @@ export default defineConfig({
         background_color: '#FBF9F5',
         display: 'standalone',
         orientation: 'portrait-primary',
-        start_url: base,
-        scope: base,
+        start_url: appPath,
+        scope: appPath,
         categories: ['lifestyle', 'utilities'],
         icons: [
           {
@@ -47,6 +66,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        navigateFallback: 'index.html',
+        navigateFallbackAllowlist: [/^\/web/],
         // Avoid workbox → terser crashes in some CI/sandbox environments
         mode: 'development',
       },

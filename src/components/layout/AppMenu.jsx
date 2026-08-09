@@ -1,5 +1,11 @@
+import { Link } from 'react-router-dom'
 import { X } from 'lucide-react'
 import Button from '../ui/Button'
+
+const itemClassName = (danger) =>
+  `rounded-2xl px-3 py-3 text-left text-sm font-semibold transition-colors hover:bg-amber-50 ${
+    danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-800'
+  }`
 
 export default function AppMenu({ open, onClose, items = [] }) {
   if (!open) return null
@@ -32,21 +38,30 @@ export default function AppMenu({ open, onClose, items = [] }) {
           {items.length === 0 ? (
             <p className="px-3 py-2 text-sm text-slate-400">No items yet</p>
           ) : (
-            items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`rounded-2xl px-3 py-3 text-left text-sm font-semibold transition-colors hover:bg-amber-50 ${
-                  item.danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-800'
-                }`}
-                onClick={() => {
-                  item.onClick?.()
-                  onClose()
-                }}
-              >
-                {item.label}
-              </button>
-            ))
+            items.map((item) =>
+              item.to ? (
+                <Link
+                  key={item.id}
+                  to={item.to}
+                  className={itemClassName(item.danger)}
+                  onClick={onClose}
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={itemClassName(item.danger)}
+                  onClick={() => {
+                    item.onClick?.()
+                    onClose()
+                  }}
+                >
+                  {item.label}
+                </button>
+              ),
+            )
           )}
         </nav>
       </div>
