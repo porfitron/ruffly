@@ -1,13 +1,28 @@
 import { useState } from 'react'
-import { Menu } from 'lucide-react'
+import { useApp } from '../../context/AppContext'
 import AppMenu from './AppMenu'
+
+function initialsFromName(name) {
+  const parts = String(name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (parts.length === 0) return 'ME'
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase()
+  }
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
 
 export default function Header({
   title = 'Ruffly',
   subtitle,
   menuItems = [],
+  menuBadge = false,
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const { ownerAccount } = useApp()
+  const initials = initialsFromName(ownerAccount?.name)
 
   return (
     <>
@@ -27,12 +42,18 @@ export default function Header({
         </div>
         <button
           type="button"
-          className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-white text-[#F59E0B] shadow-sm hover:bg-amber-50"
-          aria-label="Open menu"
+          className="relative mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-sm font-bold tracking-wide text-[#F59E0B] shadow-sm hover:bg-amber-100"
+          aria-label={menuBadge ? 'Open menu (action needed)' : 'Open menu'}
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen(true)}
         >
-          <Menu size={24} strokeWidth={2.5} />
+          {initials}
+          {menuBadge ? (
+            <span
+              className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white"
+              aria-hidden
+            />
+          ) : null}
         </button>
       </header>
 

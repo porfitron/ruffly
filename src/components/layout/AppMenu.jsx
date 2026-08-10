@@ -3,9 +3,24 @@ import { X } from 'lucide-react'
 import Button from '../ui/Button'
 
 const itemClassName = (danger) =>
-  `rounded-2xl px-3 py-3 text-left text-sm font-semibold transition-colors hover:bg-amber-50 ${
+  `flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold transition-colors hover:bg-amber-50 ${
     danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-800'
   }`
+
+function MenuItemLabel({ label, showBadge }) {
+  return (
+    <>
+      <span>{label}</span>
+      {showBadge ? (
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500"
+          aria-label="Action needed"
+          title="Action needed"
+        />
+      ) : null}
+    </>
+  )
+}
 
 export default function AppMenu({ open, onClose, items = [] }) {
   if (!open) return null
@@ -46,7 +61,7 @@ export default function AppMenu({ open, onClose, items = [] }) {
                   className={itemClassName(item.danger)}
                   onClick={onClose}
                 >
-                  {item.label}
+                  <MenuItemLabel label={item.label} showBadge={item.showBadge} />
                 </Link>
               ) : (
                 <button
@@ -58,7 +73,7 @@ export default function AppMenu({ open, onClose, items = [] }) {
                     onClose()
                   }}
                 >
-                  {item.label}
+                  <MenuItemLabel label={item.label} showBadge={item.showBadge} />
                 </button>
               ),
             )

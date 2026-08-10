@@ -16,7 +16,7 @@ function sortDogsByName(dogs) {
   )
 }
 
-/** Compact pup tab: A–Z dog summaries; tap a row to make it active. */
+/** Compact pup tab: A–Z dogs; tap to activate, tap active to toggle portion summary. */
 export default function DogsOverview({
   addingNew,
   onAddNew,
@@ -27,16 +27,28 @@ export default function DogsOverview({
 }) {
   const { dogs, activeDogId, pantry, mealPlansByDogId, dispatch } = useApp()
   const [editing, setEditing] = useState(false)
+  const [summaryOpen, setSummaryOpen] = useState(true)
   const orderedDogs = sortDogsByName(dogs)
 
   useEffect(() => {
     setEditing(false)
+    setSummaryOpen(true)
   }, [activeDogId])
 
   function handleSelect(id) {
-    if (id === activeDogId) return
+    if (id === activeDogId) {
+      setEditing(false)
+      setSummaryOpen((open) => !open)
+      return
+    }
     setEditing(false)
+    setSummaryOpen(true)
     dispatch({ type: 'SET_ACTIVE_DOG', payload: id })
+  }
+
+  function handleEdit() {
+    setEditing(true)
+    setSummaryOpen(true)
   }
 
   function handleAdded() {
@@ -76,31 +88,33 @@ export default function DogsOverview({
           )
           const active = dog.id === activeDogId
           return (
-            <li key={dog.id}>
+            <li key={dog.id} className={active ? 'space-y-2' : undefined}>
               <DogSummaryCard
                 dog={dog}
                 active={active}
+                expanded={active ? summaryOpen : undefined}
                 portionSnippet={snippet}
                 onSelect={() => handleSelect(dog.id)}
-                onEdit={active ? () => setEditing(true) : undefined}
+                onEdit={active ? handleEdit : undefined}
               />
+              {active && summaryOpen ? (
+                editing ? (
+                  <ProfileEditor
+                    onAdded={() => setEditing(false)}
+                    onCancel={() => setEditing(false)}
+                  />
+                ) : (
+                  <PortionCalculator
+                    compact
+                    onGoToPantry={onGoToPantry}
+                    onGoToBowl={onGoToBowl}
+                  />
+                )
+              ) : null}
             </li>
           )
         })}
       </ul>
-
-      {editing ? (
-        <ProfileEditor
-          onAdded={() => setEditing(false)}
-          onCancel={() => setEditing(false)}
-        />
-      ) : (
-        <PortionCalculator
-          compact
-          onGoToPantry={onGoToPantry}
-          onGoToBowl={onGoToBowl}
-        />
-      )}
 
       <Button variant="secondary" className="w-full !h-11" onClick={onAddNew}>
         + Add another dog

@@ -3,7 +3,7 @@ import Card from '../ui/Card'
 import Button from '../ui/Button'
 import { Field, fieldClassName } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
-import { EMPTY_CARE_INFO } from '../../utils/storage'
+import { EMPTY_CARE_INFO, EMPTY_OWNER_ACCOUNT } from '../../utils/storage'
 
 function careInfoHasContent(careInfo) {
   if (!careInfo) return false
@@ -23,19 +23,39 @@ function careSummary(careInfo) {
   return bits.length > 0 ? bits.join(' · ') : 'Contacts saved'
 }
 
+function formFromDogAndAccount(careInfo, ownerAccount) {
+  const account = ownerAccount ?? EMPTY_OWNER_ACCOUNT
+  const care = careInfo ?? {}
+  return {
+    ...EMPTY_CARE_INFO,
+    ...care,
+    ownerName: care.ownerName?.trim() || account.name || '',
+    ownerPhone: care.ownerPhone?.trim() || account.phone || '',
+    ownerEmail: care.ownerEmail?.trim() || account.email || '',
+  }
+}
+
 /** Emergency / vet details saved on the active dog */
 export default function CareInfoForm() {
-  const { activeDog, dispatch } = useApp()
-  const [form, setForm] = useState(EMPTY_CARE_INFO)
+  const { activeDog, ownerAccount, dispatch } = useApp()
+  const [form, setForm] = useState(() =>
+    formFromDogAndAccount(activeDog?.careInfo, ownerAccount),
+  )
   const [savedFlash, setSavedFlash] = useState(false)
   const [expanded, setExpanded] = useState(
     () => !careInfoHasContent(activeDog?.careInfo),
   )
 
   useEffect(() => {
-    setForm({ ...EMPTY_CARE_INFO, ...(activeDog?.careInfo ?? {}) })
+    setForm(formFromDogAndAccount(activeDog?.careInfo, ownerAccount))
     setExpanded(!careInfoHasContent(activeDog?.careInfo))
-  }, [activeDog?.id])
+  }, [
+    activeDog?.id,
+    activeDog?.careInfo,
+    ownerAccount?.name,
+    ownerAccount?.phone,
+    ownerAccount?.email,
+  ])
 
   if (!activeDog) return null
 
@@ -128,6 +148,20 @@ export default function CareInfoForm() {
               value={form.ownerPhone}
               onChange={(e) => update('ownerPhone', e.target.value)}
               placeholder="555-0100"
+            />
+          </Field>
+          <Field
+            label="Your email"
+            htmlFor="owner-email"
+            className="sm:col-span-2"
+          >
+            <input
+              id="owner-email"
+              className={fieldClassName}
+              type="email"
+              value={form.ownerEmail}
+              onChange={(e) => update('ownerEmail', e.target.value)}
+              placeholder="alex@example.com"
             />
           </Field>
           <Field label="Emergency contact" htmlFor="emerg-name">

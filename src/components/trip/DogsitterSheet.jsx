@@ -32,8 +32,8 @@ function isTreat(item) {
   return item.food?.category === 'treat'
 }
 
-function ContactBlock({ label, name, phone }) {
-  if (!name && !phone) return null
+function ContactBlock({ label, name, phone, email }) {
+  if (!name && !phone && !email) return null
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -43,9 +43,17 @@ function ContactBlock({ label, name, phone }) {
       {phone ? (
         <a
           href={`tel:${phone}`}
-          className="text-sm font-medium text-[#F59E0B] print:text-slate-700"
+          className="block text-sm font-medium text-[#F59E0B] print:text-slate-700"
         >
           {phone}
+        </a>
+      ) : null}
+      {email ? (
+        <a
+          href={`mailto:${email}`}
+          className="block text-sm font-medium text-[#F59E0B] print:text-slate-700"
+        >
+          {email}
         </a>
       ) : null}
     </div>
@@ -213,6 +221,7 @@ function CareSheetDocument({ dog, pantry, mealPlan, preparedOn }) {
             label="Owner"
             name={care.ownerName}
             phone={care.ownerPhone}
+            email={care.ownerEmail}
           />
           <ContactBlock
             label="Emergency"
@@ -227,6 +236,7 @@ function CareSheetDocument({ dog, pantry, mealPlan, preparedOn }) {
         </div>
         {!care.ownerName &&
         !care.ownerPhone &&
+        !care.ownerEmail &&
         !care.emergencyName &&
         !care.emergencyPhone &&
         !care.vetName &&
@@ -270,7 +280,6 @@ export default function DogsitterSheet() {
     useApp()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [printScope, setPrintScope] = useState('active') // 'active' | 'all'
-  const [pendingPrint, setPendingPrint] = useState(false)
 
   const today = new Date().toLocaleDateString(undefined, {
     year: 'numeric',
@@ -278,22 +287,39 @@ export default function DogsitterSheet() {
     day: 'numeric',
   })
 
-  const dogsForPrint =
-    printScope === 'all' && dogs.length > 1
-      ? sortDogsByName(dogs)
-      : activeDog
-        ? [activeDog]
-        : []
+  const hasMultipleDogs = dogs.length > 1
+  const dogsForPrint = hasMultipleDogs ? sortDogsByName(dogs) : []
 
   useEffect(() => {
-    if (!pendingPrint) return
-    const id = window.requestAnimationFrame(() => {
-      window.print()
-      setPendingPrint(false)
-      setPrintScope('active')
-    })
-    return () => window.cancelAnimationFrame(id)
-  }, [pendingPrint, printScope])
+    function clearPrintAttr() {
+      document.documentElement.removeAttribute('data-print-dogs')
+    }
+
+    function onAfterPrint() {
+      clearPrintAttr()
+    }
+    function onPrintMqChange(event) {
+      if (!event.matches) clearPrintAttr()
+    }
+
+    const printMq = window.matchMedia('print')
+    window.addEventListener('afterprint', onAfterPrint)
+    if (typeof printMq.addEventListener === 'function') {
+      printMq.addEventListener('change', onPrintMqChange)
+    } else {
+      printMq.addListener(onPrintMqChange)
+    }
+
+    return () => {
+      window.removeEventListener('afterprint', onAfterPrint)
+      if (typeof printMq.removeEventListener === 'function') {
+        printMq.removeEventListener('change', onPrintMqChange)
+      } else {
+        printMq.removeListener(onPrintMqChange)
+      }
+      clearPrintAttr()
+    }
+  }, [])
 
   if (!activeDog) {
     return (
@@ -308,11 +334,17 @@ export default function DogsitterSheet() {
     )
   }
 
-  const hasMultipleDogs = dogs.length > 1
-
   function handleConfirmPrint() {
+    const scope = printScope === 'all' && hasMultipleDogs ? 'all' : 'active'
     setConfirmOpen(false)
-    setPendingPrint(true)
+    setPrintScope('active')
+    // Set synchronously on the DOM (not React state) so Safari/iOS — where
+    // window.print() returns immediately — still has every sheet visible to
+    // the print capture. Cleared on afterprint / print media-query exit.
+    document.documentElement.setAttribute('data-print-dogs', scope)
+    window.requestAnimationFrame(() => {
+      window.print()
+    })
   }
 
   return (
@@ -330,8 +362,8 @@ export default function DogsitterSheet() {
         </Button>
       </div>
 
-      {/* On-screen preview of the active pup */}
-      <div className={hasMultipleDogs && printScope === 'all' ? 'print:hidden' : ''}>
+      {/* On-screen preview of the active pup; hidden when printing all */}
+      <div className="dogsitter-active-preview">
         <CareSheetDocument
           dog={activeDog}
           pantry={pantry}
@@ -340,9 +372,9 @@ export default function DogsitterSheet() {
         />
       </div>
 
-      {/* Print packet for all dogs (screen-hidden) */}
-      {hasMultipleDogs && printScope === 'all' ? (
-        <div className="hidden print:block">
+      {/* Always mounted when multi-dog so print never races a React commit */}
+      {hasMultipleDogs ? (
+        <div className="dogsitter-all-packet hidden">
           {dogsForPrint.map((dog) => (
             <div key={dog.id} className="dogsitter-print-page">
               <CareSheetDocument

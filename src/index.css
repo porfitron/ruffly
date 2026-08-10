@@ -39,6 +39,19 @@ body {
     break-before: page;
   }
 
+  /* Toggled via documentElement[data-print-dogs] — see DogsitterSheet */
+  html[data-print-dogs='all'] .dogsitter-active-preview {
+    display: none !important;
+  }
+
+  html[data-print-dogs='all'] .dogsitter-all-packet {
+    display: block !important;
+  }
+
+  html:not([data-print-dogs='all']) .dogsitter-all-packet {
+    display: none !important;
+  }
+
   a[href^='http']::after {
     content: none;
   }

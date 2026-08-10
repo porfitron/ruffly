@@ -108,6 +108,8 @@ function toCompact(state) {
       food.kcalPerCup ?? null,
       food.kcalPerCan ?? null,
       food.flavor || null,
+      food.proteinPercent ?? null,
+      food.fatPercent ?? null,
       // productUrl omitted — long URLs make QRs unscannable
     ]),
     M: mealPlansToCompact(state),
@@ -154,6 +156,8 @@ function fromCompact(compact) {
         ...(row[5] != null ? { kcalPerCup: row[5] } : {}),
         ...(row[6] != null ? { kcalPerCan: row[6] } : {}),
         ...(row[7] ? { flavor: row[7] } : {}),
+        ...(row[8] != null ? { proteinPercent: row[8] } : {}),
+        ...(row[9] != null ? { fatPercent: row[9] } : {}),
       })),
       mealPlansByDogId: mealPlansFromCompact(compact, activeDogId),
       tripSettings: {

@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { House, Package, Plane, Utensils } from 'lucide-react'
+import { House, Plane, Utensils } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import DogAvatar from '../profile/DogAvatar'
 import DogSwitchSheet from '../profile/DogSwitchSheet'
 
 const TABS = [
   { id: 'profile', label: 'Home', icon: House },
-  { id: 'pantry', label: 'Pantry', icon: Package },
   { id: 'bowl', label: 'Bowl', icon: Utensils },
   { id: 'trip', label: 'Trip', icon: Plane },
 ]
@@ -20,7 +19,7 @@ export default function Navigation({ activeTab, onChange, onAddDog }) {
   return (
     <>
       <nav className="print:hidden fixed inset-x-0 bottom-0 border-t border-amber-100 bg-white/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
-        <ul className="mx-auto grid max-w-lg grid-cols-5">
+        <ul className="mx-auto grid max-w-lg grid-cols-4">
           {TABS.map(({ id, label, icon: Icon }) => {
             const active = activeTab === id
             return (

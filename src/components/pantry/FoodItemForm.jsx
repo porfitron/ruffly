@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
 import { Field, fieldClassName } from '../ui/Field'
@@ -13,6 +14,8 @@ const EMPTY = {
   kcalPerKg: '',
   kcalPerCup: '',
   kcalPerCan: '',
+  proteinPercent: '',
+  fatPercent: '',
   productUrl: '',
 }
 
@@ -26,6 +29,8 @@ function foodToForm(food) {
     kcalPerKg: food.kcalPerKg?.toString() ?? '',
     kcalPerCup: food.kcalPerCup?.toString() ?? '',
     kcalPerCan: food.kcalPerCan?.toString() ?? '',
+    proteinPercent: food.proteinPercent?.toString() ?? '',
+    fatPercent: food.fatPercent?.toString() ?? '',
     productUrl: food.productUrl ?? '',
   }
 }
@@ -35,26 +40,45 @@ function toNumberOrNull(value) {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+function toPercentOrNull(value) {
+  if (value === '' || value == null) return null
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 0 || n > 100) return null
+  return n
+}
+
 /** P2 — Add / edit pantry food */
 export default function FoodItemForm({
   editingFood = null,
   onDone,
   embedded = false,
+  addToBowl = false,
+  initialName = '',
+  hideHeader = false,
 }) {
   const { pantry, dispatch, createId } = useApp()
-  const [form, setForm] = useState(() => foodToForm(editingFood))
+  const [form, setForm] = useState(() => {
+    const base = foodToForm(editingFood)
+    if (!editingFood && initialName) return { ...base, name: initialName }
+    return base
+  })
   const [expanded, setExpanded] = useState(
     () => embedded || Boolean(editingFood) || pantry.length === 0,
   )
 
   useEffect(() => {
-    setForm(foodToForm(editingFood))
+    const base = foodToForm(editingFood)
+    if (!editingFood && initialName) {
+      setForm({ ...base, name: initialName })
+    } else {
+      setForm(base)
+    }
     if (embedded || editingFood) {
       setExpanded(true)
     } else {
       setExpanded(pantry.length === 0)
     }
-  }, [editingFood?.id, pantry.length, embedded])
+  }, [editingFood?.id, pantry.length, embedded, initialName])
 
   const hasDensity =
     toNumberOrNull(form.kcalPerKg) ||
@@ -63,7 +87,7 @@ export default function FoodItemForm({
 
   const canSave = form.name.trim().length > 0 && hasDensity
   const isEditing = Boolean(editingFood)
-  const fieldId = editingFood?.id ?? 'new'
+  const fieldId = editingFood?.id ?? (addToBowl ? 'bowl-new' : 'new')
 
   function update(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -82,10 +106,15 @@ export default function FoodItemForm({
       kcalPerKg: toNumberOrNull(form.kcalPerKg),
       kcalPerCup: toNumberOrNull(form.kcalPerCup),
       kcalPerCan: toNumberOrNull(form.kcalPerCan),
+      proteinPercent: toPercentOrNull(form.proteinPercent),
+      fatPercent: toPercentOrNull(form.fatPercent),
       productUrl: form.productUrl.trim(),
     }
 
     dispatch({ type: 'UPSERT_FOOD', payload: food })
+    if (addToBowl && !isEditing) {
+      dispatch({ type: 'ADD_TO_MEAL', payload: food.id })
+    }
     setForm(EMPTY)
     if (!embedded) setExpanded(false)
     onDone?.()
@@ -94,6 +123,12 @@ export default function FoodItemForm({
   function handleCancel() {
     setForm(EMPTY)
     if (!embedded) setExpanded(pantry.length === 0)
+    onDone?.()
+  }
+
+  function handleDelete() {
+    if (!editingFood) return
+    dispatch({ type: 'REMOVE_FOOD', payload: editingFood.id })
     onDone?.()
   }
 
@@ -108,14 +143,18 @@ export default function FoodItemForm({
         >
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Pantry
+              {addToBowl ? 'Bowl' : 'Pantry'}
             </p>
-            <p className="truncate text-lg font-bold text-slate-800">Add food</p>
-            {pantry.length > 0 ? (
-              <p className="mt-0.5 text-sm text-slate-500">
-                {pantry.length} saved · tap to add another
-              </p>
-            ) : null}
+            <p className="truncate text-lg font-bold text-slate-800">
+              {addToBowl ? 'Create new food' : 'Add food'}
+            </p>
+            <p className="mt-0.5 text-sm text-slate-500">
+              {addToBowl
+                ? 'Saves to My Pantry and adds it to this bowl'
+                : pantry.length > 0
+                  ? `${pantry.length} saved · tap to add another`
+                  : null}
+            </p>
           </div>
           <span
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-2xl font-light leading-none text-[#F59E0B]"
@@ -123,7 +162,9 @@ export default function FoodItemForm({
           >
             +
           </span>
-          <span className="sr-only">Expand to add food</span>
+          <span className="sr-only">
+            {addToBowl ? 'Expand to create food' : 'Expand to add food'}
+          </span>
         </button>
       </Card>
     )
@@ -131,30 +172,40 @@ export default function FoodItemForm({
 
   const body = (
     <>
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-bold text-slate-800">
-            {isEditing ? 'Edit food' : 'Add food'}
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Save density + a reorder link so the bowl balancer can portion
-            precisely.
-          </p>
+      {hideHeader ? null : (
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-bold text-slate-800">
+              {isEditing
+                ? 'Edit food'
+                : addToBowl
+                  ? 'Create new food'
+                  : 'Add food'}
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {addToBowl
+                ? 'Saved to My Pantry and mixed into this bowl automatically.'
+                : 'Save density + a reorder link so the bowl balancer can portion precisely.'}
+            </p>
+          </div>
+          {isEditing || (!isEditing && pantry.length > 0) ? (
+            <button
+              type="button"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl font-light leading-none text-slate-500 hover:bg-slate-200"
+              onClick={handleCancel}
+              aria-expanded={true}
+              aria-label={isEditing ? 'Cancel edit' : 'Collapse add food'}
+            >
+              −
+            </button>
+          ) : null}
         </div>
-        {isEditing || (!isEditing && pantry.length > 0) ? (
-          <button
-            type="button"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl font-light leading-none text-slate-500 hover:bg-slate-200"
-            onClick={handleCancel}
-            aria-expanded={true}
-            aria-label={isEditing ? 'Cancel edit' : 'Collapse add food'}
-          >
-            −
-          </button>
-        ) : null}
-      </div>
+      )}
 
-      <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
+      <form
+        className={`${hideHeader ? '' : 'mt-4 '}space-y-3`}
+        onSubmit={handleSubmit}
+      >
         <Field label="Brand" htmlFor={`food-brand-${fieldId}`}>
           <input
             id={`food-brand-${fieldId}`}
@@ -247,6 +298,45 @@ export default function FoodItemForm({
           </Field>
         </div>
 
+        <div className="grid grid-cols-2 gap-3">
+          <Field
+            label="Protein %"
+            htmlFor={`food-protein-${fieldId}`}
+            hint="From the label"
+          >
+            <input
+              id={`food-protein-${fieldId}`}
+              className={fieldClassName}
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              inputMode="decimal"
+              value={form.proteinPercent}
+              onChange={(e) => update('proteinPercent', e.target.value)}
+              placeholder="38"
+            />
+          </Field>
+          <Field
+            label="Fat %"
+            htmlFor={`food-fat-${fieldId}`}
+            hint="From the label"
+          >
+            <input
+              id={`food-fat-${fieldId}`}
+              className={fieldClassName}
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              inputMode="decimal"
+              value={form.fatPercent}
+              onChange={(e) => update('fatPercent', e.target.value)}
+              placeholder="18"
+            />
+          </Field>
+        </div>
+
         <Field
           label="Reorder URL"
           htmlFor={`food-url-${fieldId}`}
@@ -274,9 +364,25 @@ export default function FoodItemForm({
             </Button>
           ) : null}
           <Button type="submit" className="flex-1" disabled={!canSave}>
-            {isEditing ? 'Update food' : 'Save to pantry'}
+            {isEditing
+              ? 'Update food'
+              : addToBowl
+                ? 'Save & add to bowl'
+                : 'Save to pantry'}
           </Button>
         </div>
+
+        {isEditing ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full text-rose-500 hover:bg-rose-50"
+            onClick={handleDelete}
+          >
+            <Trash2 size={16} />
+            Delete food
+          </Button>
+        ) : null}
       </form>
     </>
   )

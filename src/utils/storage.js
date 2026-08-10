@@ -2,6 +2,12 @@ import { uniqueDogSlug } from './dogs'
 
 const STORAGE_KEY = 'ruffly_app_data_v1'
 
+export const EMPTY_OWNER_ACCOUNT = {
+  name: '',
+  phone: '',
+  email: '',
+}
+
 export const DEFAULT_APP_DATA = {
   activeDogId: null,
   dogs: [],
@@ -11,6 +17,7 @@ export const DEFAULT_APP_DATA = {
     days: 3,
     bufferMode: 'plus1',
   },
+  ownerAccount: { ...EMPTY_OWNER_ACCOUNT },
   proTeaser: {
     hasClickedAddDog: false,
     userEmail: null,
@@ -20,6 +27,7 @@ export const DEFAULT_APP_DATA = {
 export const EMPTY_CARE_INFO = {
   ownerName: '',
   ownerPhone: '',
+  ownerEmail: '',
   emergencyName: '',
   emergencyPhone: '',
   vetName: '',
@@ -83,6 +91,10 @@ export function normalizeAppData(raw) {
     tripSettings: {
       ...base.tripSettings,
       ...(parsed.tripSettings ?? {}),
+    },
+    ownerAccount: {
+      ...EMPTY_OWNER_ACCOUNT,
+      ...(parsed.ownerAccount ?? {}),
     },
     proTeaser: {
       ...base.proTeaser,

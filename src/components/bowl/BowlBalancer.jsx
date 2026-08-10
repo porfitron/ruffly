@@ -2,6 +2,7 @@ import Card from '../ui/Card'
 import Button from '../ui/Button'
 import CalorieRing from './CalorieRing'
 import PortionSlider from './PortionSlider'
+import BowlFoodSearch from './BowlFoodSearch'
 import { Field, SegmentedControl } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
 import {
@@ -55,9 +56,6 @@ export default function BowlBalancer() {
     0,
   )
 
-  const foodsNotInBowl = pantry.filter(
-    (food) => !currentMealPlan.some((item) => item.foodId === food.id),
-  )
   const mealFoods = breakdown.filter((item) => item.food.category !== 'treat')
   const treatFoods = breakdown.filter((item) => item.food.category === 'treat')
   const mealAllocatedKcal = mealFoods.reduce(
@@ -132,12 +130,16 @@ export default function BowlBalancer() {
 
   if (pantry.length === 0) {
     return (
-      <Card className="text-center">
-        <h2 className="text-xl font-bold text-slate-800">Bowl balancer</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Add foods in the Pantry tab, then come back to mix the bowl.
-        </p>
-      </Card>
+      <div className="space-y-4">
+        <Card className="text-center">
+          <h2 className="text-xl font-bold text-slate-800">Bowl balancer</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Search or create a food below to save it to My Pantry and start
+            mixing the bowl.
+          </p>
+        </Card>
+        <BowlFoodSearch />
+      </div>
     )
   }
 
@@ -232,7 +234,7 @@ export default function BowlBalancer() {
       {breakdown.length === 0 ? (
         <Card className="text-center">
           <p className="text-sm text-slate-500">
-            Nothing in the bowl yet. Add pantry items below.
+            Nothing in the bowl yet. Search or create a food below.
           </p>
         </Card>
       ) : (
@@ -382,37 +384,7 @@ export default function BowlBalancer() {
         </>
       )}
 
-      {foodsNotInBowl.length > 0 ? (
-        <Card>
-          <h3 className="font-bold text-slate-800">Add from pantry</h3>
-          <ul className="mt-3 space-y-2">
-            {foodsNotInBowl.map((food) => (
-              <li
-                key={food.id}
-                className="flex items-center justify-between gap-3 rounded-2xl bg-[#FBF9F5] px-3 py-3"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">
-                    {food.name}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {getCategoryLabel(food.category)}
-                  </p>
-                </div>
-                <Button
-                  variant="sage"
-                  className="h-11 px-4 text-xs"
-                  onClick={() =>
-                    dispatch({ type: 'ADD_TO_MEAL', payload: food.id })
-                  }
-                >
-                  Add
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
+      <BowlFoodSearch />
     </div>
   )
 }

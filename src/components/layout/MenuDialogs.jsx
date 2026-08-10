@@ -242,8 +242,8 @@ function ResetAppDialog({ open, onClose }) {
   return (
     <Modal open={open} title="Reset App" onClose={onClose}>
       <p className="text-sm text-slate-500">
-        This clears every dog, pantry item, meal plan, and care sheet on this
-        device. This cannot be undone.
+        This clears every dog, pantry item, meal plan, account, and care sheet
+        on this device. This cannot be undone.
       </p>
       <div className="mt-4 flex flex-col gap-2">
         <Button

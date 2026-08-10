@@ -4,6 +4,7 @@ import {
   saveAppData,
   createId,
   EMPTY_CARE_INFO,
+  EMPTY_OWNER_ACCOUNT,
   normalizeAppData,
 } from '../utils/storage'
 import {
@@ -92,7 +93,22 @@ function reducer(state, action) {
         previous?.slug ||
         incoming.slug ||
         uniqueDogSlug(incoming.name, state.dogs, incoming.id)
-      const dog = enrichDog({ ...incoming, slug })
+      const account = state.ownerAccount ?? EMPTY_OWNER_ACCOUNT
+      const incomingCare = incoming.careInfo ?? {}
+      const dog = enrichDog({
+        ...incoming,
+        slug,
+        careInfo: {
+          ...EMPTY_CARE_INFO,
+          ...incomingCare,
+          ownerName:
+            incomingCare.ownerName?.trim() || account.name || '',
+          ownerPhone:
+            incomingCare.ownerPhone?.trim() || account.phone || '',
+          ownerEmail:
+            incomingCare.ownerEmail?.trim() || account.email || '',
+        },
+      })
       const dogs = exists
         ? state.dogs.map((d) => (d.id === dog.id ? dog : d))
         : [...state.dogs, dog]
@@ -202,6 +218,23 @@ function reducer(state, action) {
           : dog,
       )
       return { ...state, dogs }
+    }
+    case 'SET_OWNER_ACCOUNT': {
+      const ownerAccount = {
+        ...EMPTY_OWNER_ACCOUNT,
+        ...action.payload,
+      }
+      const dogs = state.dogs.map((dog) => ({
+        ...dog,
+        careInfo: {
+          ...EMPTY_CARE_INFO,
+          ...(dog.careInfo ?? {}),
+          ownerName: ownerAccount.name,
+          ownerPhone: ownerAccount.phone,
+          ownerEmail: ownerAccount.email,
+        },
+      }))
+      return { ...state, ownerAccount, dogs }
     }
     case 'REPLACE_ALL': {
       const next = normalizeAppData(action.payload)

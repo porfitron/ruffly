@@ -44,6 +44,7 @@ export function formatPortionSnippet(feedingPlan) {
 export default function DogSummaryCard({
   dog,
   active = false,
+  expanded,
   portionSnippet = null,
   onSelect,
   onEdit,
@@ -99,8 +100,19 @@ export default function DogSummaryCard({
             type="button"
             className="flex min-w-0 flex-1 items-center gap-3 text-left"
             onClick={onSelect}
-            aria-label={active ? `${name} (active)` : `Switch to ${name}`}
+            aria-label={
+              active
+                ? expanded === true
+                  ? `Hide portion summary for ${name}`
+                  : expanded === false
+                    ? `Show portion summary for ${name}`
+                    : `${name} (active)`
+                : `Switch to ${name}`
+            }
             aria-current={active ? 'true' : undefined}
+            aria-expanded={
+              active && typeof expanded === 'boolean' ? expanded : undefined
+            }
           >
             {body}
           </button>
