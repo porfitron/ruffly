@@ -15,10 +15,15 @@ import {
 function planStateFromApp(app) {
   return {
     dogs: app.dogs,
+    catalog: app.catalog,
     pantry: app.pantry,
     mealPlansByDogId: app.mealPlansByDogId,
+    menusByDogId: app.menusByDogId,
+    logs: app.logs,
     tripSettings: app.tripSettings,
     activeDogId: app.activeDogId,
+    ownerAccount: app.ownerAccount,
+    proTeaser: app.proTeaser,
   }
 }
 
@@ -35,6 +40,7 @@ function SharePlanDialog({ open, onClose }) {
   const [frameIndex, setFrameIndex] = useState(0)
   const [paused, setPaused] = useState(false)
   const [error, setError] = useState('')
+  const [omittedPhotos, setOmittedPhotos] = useState(false)
 
   useEffect(() => {
     if (!open) return undefined
@@ -43,14 +49,20 @@ function SharePlanDialog({ open, onClose }) {
     setFrameIndex(0)
     setPaused(false)
     setError('')
+    setOmittedPhotos(false)
 
     ;(async () => {
       try {
-        const { frames } = encodePlanFrames(planStateFromApp(app))
+        const encoded = encodePlanFrames(planStateFromApp(app))
         const urls = await Promise.all(
-          frames.map((payload) => QRCode.toDataURL(payload, QR_RENDER_OPTIONS)),
+          encoded.frames.map((payload) =>
+            QRCode.toDataURL(payload, QR_RENDER_OPTIONS),
+          ),
         )
-        if (!cancelled) setQrUrls(urls)
+        if (!cancelled) {
+          setQrUrls(urls)
+          setOmittedPhotos(Boolean(encoded.omittedPhotos))
+        }
       } catch (err) {
         if (!cancelled) setError(err.message || 'Could not create QR code.')
       }
@@ -59,7 +71,19 @@ function SharePlanDialog({ open, onClose }) {
     return () => {
       cancelled = true
     }
-  }, [open, app.dogs, app.pantry, app.mealPlansByDogId, app.tripSettings, app.activeDogId])
+  }, [
+    open,
+    app.dogs,
+    app.catalog,
+    app.pantry,
+    app.mealPlansByDogId,
+    app.menusByDogId,
+    app.logs,
+    app.tripSettings,
+    app.activeDogId,
+    app.ownerAccount,
+    app.proTeaser,
+  ])
 
   const cycling = qrUrls.length > 1 && !paused
 
@@ -126,6 +150,11 @@ function SharePlanDialog({ open, onClose }) {
                 </Button>
               </div>
             </>
+          ) : null}
+          {omittedPhotos ? (
+            <p className="mt-3 text-sm text-slate-500">
+              Dog photos were skipped so this transfer would fit.
+            </p>
           ) : null}
         </>
       )}
@@ -247,23 +276,33 @@ function ReceivePlanDialog({ open, onClose }) {
           : `${summary.dogNames[0]} + ${summary.dogNames.length - 1} more`
 
     return (
-      <Modal open={open} title="Replace current plan?" onClose={close}>
+      <Modal open={open} title="Replace everything?" onClose={close}>
         <p className="text-sm text-slate-500">
-          This will overwrite the dogs, pantry, and meal plan on this device.
+          This will overwrite dogs, catalog, menus, care logs, and account
+          details on this device.
         </p>
         <ul className="mt-4 space-y-2 rounded-2xl bg-[#FBF9F5] p-4 text-sm text-slate-700">
           <li>
             <span className="font-semibold">Dogs:</span> {dogLabel}
           </li>
           <li>
-            <span className="font-semibold">Pantry:</span> {summary.pantryCount}{' '}
-            {summary.pantryCount === 1 ? 'item' : 'items'}
+            <span className="font-semibold">Catalog:</span>{' '}
+            {summary.catalogCount}{' '}
+            {summary.catalogCount === 1 ? 'item' : 'items'}
           </li>
           <li>
-            <span className="font-semibold">Meal plan:</span>{' '}
-            {summary.mealItemCount}{' '}
-            {summary.mealItemCount === 1 ? 'food' : 'foods'}
+            <span className="font-semibold">Menus:</span>{' '}
+            {summary.menuItemCount}{' '}
+            {summary.menuItemCount === 1 ? 'item' : 'items'}
           </li>
+          <li>
+            <span className="font-semibold">Care logs:</span> {summary.logCount}
+          </li>
+          {summary.hasOwner ? (
+            <li>
+              <span className="font-semibold">Owner account:</span> included
+            </li>
+          ) : null}
         </ul>
         <div className="mt-4 flex flex-col gap-2">
           <Button className="w-full" onClick={confirmImport}>
