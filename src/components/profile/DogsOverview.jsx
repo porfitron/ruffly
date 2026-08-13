@@ -145,7 +145,7 @@ export default function DogsOverview({
       <div className="px-0.5">
         <h2 className="text-lg font-bold text-slate-800">Your pack</h2>
         <p className="text-sm text-slate-500">
-          Tap a dog for menu and profile details. Daily care lives on Today.
+          Tap a dog for menu and profile details.
         </p>
       </div>
 

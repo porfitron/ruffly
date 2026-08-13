@@ -449,9 +449,14 @@ export function MenuEditorSheet({ open, dogId, onClose, onDogChange }) {
 
   const candidates = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const used = new Set(menu.map((m) => m.careItemId))
+    // Only hide items already on this slot — same food can be breakfast + evening.
+    const usedInSlot = new Set(
+      menu
+        .filter((m) => (m.slot ?? 'daily') === slot)
+        .map((m) => m.careItemId),
+    )
     return kindCatalog
-      .filter((item) => !used.has(item.id))
+      .filter((item) => !usedInSlot.has(item.id))
       .filter((item) => {
         if (!q) return true
         const hay = [item.name, item.formula, item.brand, item.flavor]
@@ -461,7 +466,7 @@ export function MenuEditorSheet({ open, dogId, onClose, onDogChange }) {
         return hay.includes(q)
       })
       .slice(0, 10)
-  }, [kindCatalog, query, menu])
+  }, [kindCatalog, query, menu, slot])
 
   function selectDog(nextId) {
     setSelectedDogId(nextId)
@@ -470,6 +475,13 @@ export function MenuEditorSheet({ open, dogId, onClose, onDogChange }) {
     setQuery('')
     setCreating(false)
     setCreateForm(emptyCreate(pickKind))
+  }
+
+  function handleSlotChange(next) {
+    setSlot(next)
+    setQuery('')
+    // Show the pick list for the new slot (unless catalog is empty).
+    if (!catalogEmpty) setCreating(false)
   }
 
   function startCreate(seedName = '') {
@@ -655,7 +667,7 @@ export function MenuEditorSheet({ open, dogId, onClose, onDogChange }) {
         <Field label="When">
           <SegmentedControl
             value={slot}
-            onChange={setSlot}
+            onChange={handleSlotChange}
             options={SLOT_OPTIONS}
             ariaLabel="Menu slot"
           />
@@ -783,11 +795,20 @@ export function MenuEditorSheet({ open, dogId, onClose, onDogChange }) {
                     <span className="truncate">
                       {item.kind === 'food' ? foodListLabel(item) : item.name}
                     </span>
-                    <Plus size={16} className="shrink-0 text-[#F59E0B]" />
+                    <span className="ml-2 flex shrink-0 items-center gap-1 text-xs font-semibold text-[#F59E0B]">
+                      <Plus size={14} />
+                      {slot === 'as_needed' ? 'Add' : slot}
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
+            {candidates.length === 0 && !query.trim() ? (
+              <p className="px-1 text-xs text-slate-400">
+                Every saved {kindName} is already on {slot.replace('_', ' ')}.
+                Create a new one below, or pick another slot.
+              </p>
+            ) : null}
             {candidates.length === 0 && query.trim() ? (
               <button
                 type="button"
@@ -804,7 +825,7 @@ export function MenuEditorSheet({ open, dogId, onClose, onDogChange }) {
                 onClick={() => startCreate()}
               >
                 <Plus size={16} />
-                New {kindName}
+                New {kindName} for {slot.replace('_', ' ')}
               </Button>
             )}
           </div>
