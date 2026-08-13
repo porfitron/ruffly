@@ -5,7 +5,16 @@ import {
   createId,
   EMPTY_CARE_INFO,
   EMPTY_OWNER_ACCOUNT,
+  EMPTY_DOG_ONBOARDING,
+  EMPTY_DOG_PROFILE_DETAILS,
   normalizeAppData,
+  normalizeDogRecord,
+  pantryFromCatalog,
+  pantryFoodToCatalogItem,
+  upsertCatalogItem,
+  stripCareItemReferences,
+  mealPlanToMenuItems,
+  menuItemsToMealPlan,
 } from '../utils/storage'
 import {
   calculateDER,
@@ -26,13 +35,21 @@ function enrichDog(dog) {
   const calorieMode = dog.calorieMode === 'manual' ? 'manual' : 'calculator'
   const manualTarget = Number(dog.manualTargetKcal)
   const mealsPerDay = Number(dog.mealsPerDay) === 1 ? 1 : 2
+  const profile = normalizeDogRecord({
+    ...EMPTY_DOG_PROFILE_DETAILS,
+    ...dog,
+    onboarding: {
+      ...EMPTY_DOG_ONBOARDING,
+      ...(dog.onboarding ?? {}),
+    },
+  })
 
   if (calorieMode === 'manual' && Number.isFinite(manualTarget) && manualTarget > 0) {
     return {
-      ...dog,
+      ...profile,
       calorieMode,
       mealsPerDay,
-      careInfo: { ...EMPTY_CARE_INFO, ...(dog.careInfo ?? {}) },
+      careInfo: { ...EMPTY_CARE_INFO, ...(profile.careInfo ?? {}) },
       activityMultiplier: null,
       calculatedRER,
       targetDER: Math.round(manualTarget),
@@ -46,10 +63,10 @@ function enrichDog(dog) {
   )
   const targetDER = calculateDER(calculatedRER, multiplier)
   return {
-    ...dog,
+    ...profile,
     calorieMode: 'calculator',
     mealsPerDay,
-    careInfo: { ...EMPTY_CARE_INFO, ...(dog.careInfo ?? {}) },
+    careInfo: { ...EMPTY_CARE_INFO, ...(profile.careInfo ?? {}) },
     activityMultiplier: multiplier,
     calculatedRER,
     targetDER,
@@ -61,23 +78,78 @@ function mealPlanFor(state, dogId = state.activeDogId) {
   return state.mealPlansByDogId?.[dogId] ?? []
 }
 
+function menuFor(state, dogId = state.activeDogId) {
+  if (!dogId) return []
+  return state.menusByDogId?.[dogId] ?? []
+}
+
+/** Keep menusByDogId in sync when the legacy bowl % plan changes. */
 function withActiveMealPlan(state, plan) {
   if (!state.activeDogId) return state
+  const dogId = state.activeDogId
+  const previousMenu = menuFor(state, dogId)
+  // Preserve non-daily / non-legacy menu rows (meds, supplements, slotted items).
+  const preserved = previousMenu.filter(
+    (item) =>
+      item.legacyPercentage == null &&
+      item.slot !== 'daily' &&
+      item.slot != null,
+  )
+  const fromPlan = mealPlanToMenuItems(plan)
+  const menuItems = [...fromPlan, ...preserved]
   return {
     ...state,
+    dogs: markMenuDone(state, dogId, menuItems),
     mealPlansByDogId: {
       ...state.mealPlansByDogId,
-      [state.activeDogId]: plan,
+      [dogId]: plan,
+    },
+    menusByDogId: {
+      ...state.menusByDogId,
+      [dogId]: menuItems,
     },
   }
 }
 
-function stripFoodFromAllPlans(mealPlansByDogId, foodId) {
-  const next = {}
-  for (const [dogId, plan] of Object.entries(mealPlansByDogId ?? {})) {
-    next[dogId] = (plan ?? []).filter((item) => item.foodId !== foodId)
+function markMenuDone(state, dogId, menuItems) {
+  if (!dogId || !(menuItems?.length > 0)) return state.dogs
+  return state.dogs.map((dog) =>
+    dog.id === dogId
+      ? enrichDog({
+          ...dog,
+          onboarding: {
+            ...EMPTY_DOG_ONBOARDING,
+            ...(dog.onboarding ?? {}),
+            menuDone: true,
+          },
+        })
+      : dog,
+  )
+}
+
+function withActiveMenu(state, menuItems) {
+  if (!state.activeDogId) return state
+  const dogId = state.activeDogId
+  return {
+    ...state,
+    dogs: markMenuDone(state, dogId, menuItems),
+    menusByDogId: {
+      ...state.menusByDogId,
+      [dogId]: menuItems,
+    },
+    mealPlansByDogId: {
+      ...state.mealPlansByDogId,
+      [dogId]: menuItemsToMealPlan(menuItems),
+    },
   }
-  return next
+}
+
+function withCatalog(state, catalog) {
+  return {
+    ...state,
+    catalog,
+    pantry: pantryFromCatalog(catalog),
+  }
 }
 
 function reducer(state, action) {
@@ -94,10 +166,32 @@ function reducer(state, action) {
         incoming.slug ||
         uniqueDogSlug(incoming.name, state.dogs, incoming.id)
       const account = state.ownerAccount ?? EMPTY_OWNER_ACCOUNT
-      const incomingCare = incoming.careInfo ?? {}
+      const incomingCare = incoming.careInfo ?? previous?.careInfo ?? {}
+      const menuLen = (state.menusByDogId?.[incoming.id] ?? []).length
       const dog = enrichDog({
+        // Preserve completable profile fields when basics editor omits them.
+        ...EMPTY_DOG_PROFILE_DETAILS,
+        ...(previous ?? {}),
         ...incoming,
         slug,
+        medicationNeedIds:
+          incoming.medicationNeedIds ?? previous?.medicationNeedIds ?? [],
+        behaviorNotes:
+          incoming.behaviorNotes ?? previous?.behaviorNotes ?? '',
+        licenseNumber:
+          incoming.licenseNumber ?? previous?.licenseNumber ?? '',
+        vaccineInfo: incoming.vaccineInfo ?? previous?.vaccineInfo ?? '',
+        microchipId: incoming.microchipId ?? previous?.microchipId ?? '',
+        onboarding: {
+          ...EMPTY_DOG_ONBOARDING,
+          ...(previous?.onboarding ?? {}),
+          ...(incoming.onboarding ?? {}),
+          basicsDone: true,
+          menuDone:
+            incoming.onboarding?.menuDone ??
+            previous?.onboarding?.menuDone ??
+            menuLen > 0,
+        },
         careInfo: {
           ...EMPTY_CARE_INFO,
           ...incomingCare,
@@ -112,24 +206,60 @@ function reducer(state, action) {
       const dogs = exists
         ? state.dogs.map((d) => (d.id === dog.id ? dog : d))
         : [...state.dogs, dog]
-      const mealPlansByDogId = {
-        ...state.mealPlansByDogId,
-        [dog.id]: state.mealPlansByDogId?.[dog.id] ?? [],
-      }
       return {
         ...state,
         dogs,
-        mealPlansByDogId,
+        mealPlansByDogId: {
+          ...state.mealPlansByDogId,
+          [dog.id]: state.mealPlansByDogId?.[dog.id] ?? [],
+        },
+        menusByDogId: {
+          ...state.menusByDogId,
+          [dog.id]: state.menusByDogId?.[dog.id] ?? [],
+        },
         activeDogId: dog.id,
       }
+    }
+    case 'UPDATE_DOG_PROFILE': {
+      // Partial profile completion (meds, IDs, behavior) — does not replace basics.
+      if (!action.payload?.id && !state.activeDogId) return state
+      const dogId = action.payload.id ?? state.activeDogId
+      const dogs = state.dogs.map((dog) => {
+        if (dog.id !== dogId) return dog
+        const next = {
+          ...dog,
+          ...action.payload,
+          id: dogId,
+          careInfo: {
+            ...EMPTY_CARE_INFO,
+            ...(dog.careInfo ?? {}),
+            ...(action.payload.careInfo ?? {}),
+          },
+          onboarding: {
+            ...EMPTY_DOG_ONBOARDING,
+            ...(dog.onboarding ?? {}),
+            ...(action.payload.onboarding ?? {}),
+          },
+        }
+        if (action.payload.medicationNeedIds) {
+          next.medicationNeedIds = [
+            ...new Set(action.payload.medicationNeedIds.filter(Boolean)),
+          ]
+        }
+        return enrichDog(next)
+      })
+      return { ...state, dogs }
     }
     case 'SET_ACTIVE_DOG':
       return { ...state, activeDogId: action.payload }
     case 'REMOVE_DOG': {
       const dogId = action.payload
       const dogs = state.dogs.filter((d) => d.id !== dogId)
-      const { [dogId]: _removed, ...mealPlansByDogId } =
+      const { [dogId]: _removedPlan, ...mealPlansByDogId } =
         state.mealPlansByDogId ?? {}
+      const { [dogId]: _removedMenu, ...menusByDogId } =
+        state.menusByDogId ?? {}
+      const logs = (state.logs ?? []).filter((log) => log.dogId !== dogId)
       const activeDogId =
         state.activeDogId === dogId
           ? (dogs[0]?.id ?? null)
@@ -138,26 +268,126 @@ function reducer(state, action) {
         ...state,
         dogs,
         mealPlansByDogId,
+        menusByDogId,
+        logs,
         activeDogId,
       }
     }
-    case 'UPSERT_FOOD': {
-      const food = action.payload
-      const exists = state.pantry.some((f) => f.id === food.id)
-      const pantry = exists
-        ? state.pantry.map((f) => (f.id === food.id ? food : f))
-        : [...state.pantry, food]
-      return { ...state, pantry }
+
+    // —— Catalog (P2) ——
+    case 'UPSERT_CARE_ITEM': {
+      const catalog = upsertCatalogItem(state.catalog, action.payload)
+      return withCatalog(state, catalog)
     }
-    case 'REMOVE_FOOD':
+    case 'REMOVE_CARE_ITEM': {
+      const careItemId = action.payload
+      const catalog = (state.catalog ?? []).filter((c) => c.id !== careItemId)
+      const refs = stripCareItemReferences(state, careItemId)
+      return withCatalog(
+        {
+          ...state,
+          ...refs,
+        },
+        catalog,
+      )
+    }
+
+    // Legacy food actions → catalog
+    case 'UPSERT_FOOD': {
+      const mapped = pantryFoodToCatalogItem(action.payload)
+      const catalog = upsertCatalogItem(state.catalog, mapped)
+      return withCatalog(state, catalog)
+    }
+    case 'REMOVE_FOOD': {
+      const careItemId = action.payload
+      const catalog = (state.catalog ?? []).filter((c) => c.id !== careItemId)
+      const refs = stripCareItemReferences(state, careItemId)
+      return withCatalog({ ...state, ...refs }, catalog)
+    }
+
+    // —— Daily menu (P2) ——
+    case 'SET_DOG_MENU': {
+      const { dogId = state.activeDogId, items } = action.payload ?? {}
+      if (!dogId) return state
       return {
         ...state,
-        pantry: state.pantry.filter((f) => f.id !== action.payload),
-        mealPlansByDogId: stripFoodFromAllPlans(
-          state.mealPlansByDogId,
-          action.payload,
+        dogs: markMenuDone(state, dogId, items ?? []),
+        menusByDogId: {
+          ...state.menusByDogId,
+          [dogId]: items ?? [],
+        },
+        mealPlansByDogId: {
+          ...state.mealPlansByDogId,
+          [dogId]: menuItemsToMealPlan(items ?? []),
+        },
+      }
+    }
+    case 'UPSERT_MENU_ITEM': {
+      if (!state.activeDogId) return state
+      const incoming = action.payload
+      const current = menuFor(state)
+      const exists = current.some((item) => item.id === incoming.id)
+      const next = exists
+        ? current.map((item) =>
+            item.id === incoming.id ? { ...item, ...incoming } : item,
+          )
+        : [
+            ...current,
+            {
+              id: incoming.id || createId('menu'),
+              careItemId: incoming.careItemId,
+              slot: incoming.slot ?? 'daily',
+              amount: incoming.amount ?? null,
+              unit: incoming.unit ?? null,
+              ...(incoming.legacyPercentage != null
+                ? { legacyPercentage: Number(incoming.legacyPercentage) || 0 }
+                : {}),
+            },
+          ]
+      return withActiveMenu(state, next)
+    }
+    case 'DELETE_MENU_ITEM': {
+      if (!state.activeDogId) return state
+      return withActiveMenu(
+        state,
+        menuFor(state).filter((item) => item.id !== action.payload),
+      )
+    }
+
+    // —— Logs (P2) ——
+    case 'ADD_LOG': {
+      const payload = action.payload ?? {}
+      const log = {
+        id: payload.id || createId('log'),
+        dogId: payload.dogId ?? state.activeDogId,
+        careItemId: payload.careItemId ?? null,
+        kind: payload.kind ?? 'food',
+        amount: payload.amount ?? null,
+        unit: payload.unit ?? null,
+        kcal: payload.kcal ?? null,
+        loggedAt: payload.loggedAt || new Date().toISOString(),
+        note: payload.note ?? '',
+        menuItemId: payload.menuItemId ?? null,
+      }
+      return { ...state, logs: [...(state.logs ?? []), log] }
+    }
+    case 'UPDATE_LOG': {
+      const incoming = action.payload
+      if (!incoming?.id) return state
+      return {
+        ...state,
+        logs: (state.logs ?? []).map((log) =>
+          log.id === incoming.id ? { ...log, ...incoming } : log,
         ),
       }
+    }
+    case 'DELETE_LOG':
+      return {
+        ...state,
+        logs: (state.logs ?? []).filter((log) => log.id !== action.payload),
+      }
+
+    // —— Legacy bowl meal plan ——
     case 'SET_MEAL_PLAN':
       return withActiveMealPlan(state, action.payload)
     case 'SET_MEAL_PERCENTAGE': {
@@ -188,6 +418,7 @@ function reducer(state, action) {
         { foodId, percentage: 0 },
       ])
     }
+
     case 'MARK_ADD_DOG_TEASER':
       return {
         ...state,
@@ -307,11 +538,15 @@ export function AppProvider({ children }) {
   const activeDog =
     state.dogs.find((dog) => dog.id === state.activeDogId) ?? null
   const currentMealPlan = mealPlanFor(state)
+  const currentMenu = menuFor(state)
+  const pantry = pantryFromCatalog(state.catalog)
 
   const value = {
     ...state,
+    pantry,
     activeDog,
     currentMealPlan,
+    currentMenu,
     dispatch,
     createId,
   }

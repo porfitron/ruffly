@@ -4,17 +4,17 @@ import Navigation from '../components/layout/Navigation'
 import MenuDialogs from '../components/layout/MenuDialogs'
 import MyAccountPage from '../components/account/MyAccountPage'
 import DogsOverview from '../components/profile/DogsOverview'
-import ActiveDogSummary from '../components/profile/ActiveDogSummary'
-import PantryTab from '../components/pantry/PantryTab'
-import BowlBalancer from '../components/bowl/BowlBalancer'
-import TripTab from '../components/trip/TripTab'
+import TodayView from '../components/log/TodayView'
+import QuickLogSheet, {
+  MenuEditorSheet,
+} from '../components/log/QuickLogSheet'
+import CatalogTab from '../components/catalog/CatalogTab'
 import { useApp } from '../context/AppContext'
 
 const SUBTITLES = {
-  profile: 'Precision nutrition for your pup',
-  pantry: 'Foods, densities & reorder links',
-  bowl: 'Balance the bowl to the daily target',
-  trip: 'Pack food & share a care sheet',
+  today: 'What your pack needs today',
+  pack: 'Dogs, menus & profiles',
+  pantry: 'Food, meds & supplements library',
 }
 
 function isOwnerAccountIncomplete(ownerAccount) {
@@ -26,11 +26,13 @@ function isOwnerAccountIncomplete(ownerAccount) {
 }
 
 export default function WebApp() {
-  const { ownerAccount } = useApp()
-  const [activeTab, setActiveTab] = useState('profile')
+  const { ownerAccount, dogs } = useApp()
+  const [activeTab, setActiveTab] = useState('today')
   const [menuDialog, setMenuDialog] = useState(null)
   const [addingNewDog, setAddingNewDog] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
+  const [logOpen, setLogOpen] = useState(false)
+  const [menuDogId, setMenuDogId] = useState(null)
 
   const accountIncomplete = isOwnerAccountIncomplete(ownerAccount)
 
@@ -43,6 +45,15 @@ export default function WebApp() {
     setActiveTab(id)
   }
 
+  function openAddDog() {
+    setActiveTab('pack')
+    setAddingNewDog(true)
+  }
+
+  function openMenuEditor(dogId) {
+    setMenuDogId(dogId ?? dogs[0]?.id ?? 'pick')
+  }
+
   const menuItems = [
     {
       id: 'account',
@@ -51,8 +62,8 @@ export default function WebApp() {
       showBadge: accountIncomplete,
     },
     {
-      id: 'pantry',
-      label: 'My Pantry',
+      id: 'catalog',
+      label: 'Catalog',
       onClick: () => handleTabChange('pantry'),
     },
     { id: 'share', label: 'Share Plan', onClick: () => setMenuDialog('share') },
@@ -78,50 +89,67 @@ export default function WebApp() {
     <div className="mx-auto min-h-dvh max-w-lg bg-[#FBF9F5] pb-24 print:max-w-none print:bg-white print:pb-0">
       <div className="print:hidden">
         <Header
-          subtitle={SUBTITLES[activeTab]}
+          subtitle={SUBTITLES[activeTab] ?? SUBTITLES.today}
           menuItems={menuItems}
           menuBadge={accountIncomplete}
         />
       </div>
 
       <main className="space-y-4 px-4 print:space-y-0 print:px-0">
-        {activeTab === 'profile' && (
+        {activeTab === 'today' && (
+          <TodayView
+            onLog={() => setLogOpen(true)}
+            onAddDog={openAddDog}
+            onOpenPack={() => handleTabChange('pack')}
+            onEditMenu={openMenuEditor}
+          />
+        )}
+
+        {activeTab === 'pack' && (
           <DogsOverview
             addingNew={addingNewDog}
             onAddNew={() => setAddingNewDog(true)}
             onCancelAdd={() => setAddingNewDog(false)}
-            onAdded={() => setAddingNewDog(false)}
-            onGoToPantry={() => setActiveTab('pantry')}
-            onGoToBowl={() => setActiveTab('bowl')}
+            onAdded={(dogId) => {
+              setAddingNewDog(false)
+              // Menu is the onboarding goal.
+              if (dogId) openMenuEditor(dogId)
+            }}
+            onEditMenu={openMenuEditor}
           />
         )}
 
-        {activeTab === 'bowl' || activeTab === 'trip' ? (
-          <ActiveDogSummary
-            onAddDog={() => {
-              setActiveTab('profile')
-              setAddingNewDog(true)
-            }}
-          />
-        ) : null}
-
-        {activeTab === 'pantry' && <PantryTab />}
-
-        {activeTab === 'bowl' && <BowlBalancer />}
-
-        {activeTab === 'trip' && <TripTab />}
+        {activeTab === 'pantry' && <CatalogTab />}
       </main>
 
       <div className="print:hidden">
-        <Navigation
-          activeTab={activeTab}
-          onChange={handleTabChange}
-          onAddDog={() => {
-            setActiveTab('profile')
-            setAddingNewDog(true)
-          }}
-        />
+        {(activeTab === 'today' || activeTab === 'pack') && (
+          <Navigation
+            activeTab={activeTab}
+            onChange={handleTabChange}
+            onLog={() => setLogOpen(true)}
+          />
+        )}
+        {activeTab === 'pantry' ? (
+          <div className="fixed inset-x-0 bottom-0 border-t border-amber-100 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
+            <button
+              type="button"
+              className="mx-auto block w-full max-w-lg h-12 rounded-2xl bg-[#F59E0B] text-sm font-semibold text-white"
+              onClick={() => handleTabChange('today')}
+            >
+              Back to Today
+            </button>
+          </div>
+        ) : null}
       </div>
+
+      <QuickLogSheet open={logOpen} onClose={() => setLogOpen(false)} />
+      <MenuEditorSheet
+        open={Boolean(menuDogId)}
+        dogId={menuDogId === 'pick' ? null : menuDogId}
+        onDogChange={(id) => setMenuDogId(id)}
+        onClose={() => setMenuDogId(null)}
+      />
 
       <MenuDialogs dialog={menuDialog} onClose={() => setMenuDialog(null)} />
     </div>

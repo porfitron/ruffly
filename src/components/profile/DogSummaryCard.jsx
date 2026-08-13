@@ -38,16 +38,18 @@ export function formatPortionSnippet(feedingPlan) {
 }
 
 /**
- * Compact pup row: avatar, vitals, optional portion line.
- * Tap the row to make that dog active (or open switcher); Edit stays separate.
+ * Compact pup row: avatar + vitals.
+ * Pack uses selected/expanded (no “Active” badge).
  */
 export default function DogSummaryCard({
   dog,
   active = false,
+  selected = false,
   expanded,
   portionSnippet = null,
   onSelect,
   onEdit,
+  showActiveBadge = true,
 }) {
   const name = dog.name?.trim() || 'Unnamed'
   const weight =
@@ -56,6 +58,7 @@ export default function DogSummaryCard({
       : null
   const der = dog.targetDER ? `${dog.targetDER} kcal` : null
   const meta = [weight, der].filter(Boolean).join(' · ')
+  const highlighted = selected || active
 
   const body = (
     <>
@@ -63,12 +66,12 @@ export default function DogSummaryCard({
         name={name}
         photoUrl={dog.photoUrl}
         size="sm"
-        ring={active}
+        ring={highlighted}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-base font-bold text-slate-800">{name}</p>
-          {active ? (
+          {showActiveBadge && active ? (
             <span className="shrink-0 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#F59E0B]">
               Active
             </span>
@@ -91,7 +94,7 @@ export default function DogSummaryCard({
   return (
     <div
       className={`rounded-3xl bg-white p-3 shadow-sm transition-shadow ${
-        active ? 'ring-2 ring-[#F59E0B]/40' : 'hover:shadow-md'
+        highlighted ? 'ring-2 ring-[#F59E0B]/40' : 'hover:shadow-md'
       }`}
     >
       <div className="flex items-center gap-3">
@@ -101,17 +104,14 @@ export default function DogSummaryCard({
             className="flex min-w-0 flex-1 items-center gap-3 text-left"
             onClick={onSelect}
             aria-label={
-              active
-                ? expanded === true
-                  ? `Hide portion summary for ${name}`
-                  : expanded === false
-                    ? `Show portion summary for ${name}`
-                    : `${name} (active)`
-                : `Switch to ${name}`
+              typeof expanded === 'boolean'
+                ? expanded
+                  ? `Hide details for ${name}`
+                  : `Show details for ${name}`
+                : `Select ${name}`
             }
-            aria-current={active ? 'true' : undefined}
             aria-expanded={
-              active && typeof expanded === 'boolean' ? expanded : undefined
+              typeof expanded === 'boolean' ? expanded : undefined
             }
           >
             {body}
@@ -120,7 +120,7 @@ export default function DogSummaryCard({
           <div className="flex min-w-0 flex-1 items-center gap-3">{body}</div>
         )}
 
-        {active && onEdit ? (
+        {onEdit ? (
           <button
             type="button"
             onClick={onEdit}

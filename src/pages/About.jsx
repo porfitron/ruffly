@@ -12,14 +12,15 @@ export default function About() {
           Ruffly
         </p>
         <h1 className="mt-6 text-2xl font-extrabold tracking-tight text-slate-800">
-          Precision nutrition for your pup
+          Care logging for every dog you look after
         </h1>
         <p className="mt-3 text-base leading-relaxed text-slate-500">
-          Ruffly helps you dial in daily calories, keep a pantry of real foods,
-          balance the bowl, and pack a trip care sheet — all on your phone.
+          Ruffly is a simple daily logbook for meals, meds, supplements, and
+          weight — with a recommended calorie target and a menu for each dog.
         </p>
         <p className="mt-3 text-base leading-relaxed text-slate-500">
-          Built for dog people who care about the numbers behind the bowl.
+          Built like a plant-care app: see what&apos;s due today, check it off,
+          and keep profiles handy when you need them.
         </p>
         <div className="mt-8 flex flex-wrap gap-4">
           <Link

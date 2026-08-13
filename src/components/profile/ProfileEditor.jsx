@@ -65,14 +65,19 @@ function previewFromForm(form) {
   return { rer, der, multiplier }
 }
 
-/** Compact dog profile form — create or edit the active pup. */
+/** Compact dog profile form — create or edit a pup. */
 export default function ProfileEditor({
   addingNew = false,
+  dogId = null,
   onAdded,
   onCancel,
 }) {
-  const { activeDog, dispatch, createId } = useApp()
-  const editingDog = addingNew ? null : activeDog
+  const { dogs, activeDog, dispatch, createId } = useApp()
+  const editingDog = addingNew
+    ? null
+    : dogId
+      ? (dogs.find((d) => d.id === dogId) ?? null)
+      : activeDog
   const [form, setForm] = useState(() =>
     editingDog ? dogToForm(editingDog) : EMPTY_FORM,
   )
@@ -121,11 +126,12 @@ export default function ProfileEditor({
 
     const isManual = form.calorieMode === 'manual'
     const isNew = addingNew || !editingDog
+    const dogId = isNew ? createId('dog') : editingDog.id
 
     dispatch({
       type: 'UPSERT_DOG',
       payload: {
-        id: isNew ? createId('dog') : editingDog.id,
+        id: dogId,
         name: form.name.trim(),
         weight: Number(form.weight),
         weightUnit: form.weightUnit,
@@ -141,7 +147,7 @@ export default function ProfileEditor({
       },
     })
     setSavedFlash(true)
-    onAdded?.()
+    onAdded?.(dogId)
     window.setTimeout(() => setSavedFlash(false), 1600)
   }
 

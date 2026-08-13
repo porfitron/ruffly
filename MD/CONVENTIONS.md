@@ -30,11 +30,11 @@ Typography & Spacing
 
     Component Isolation: Keep components focused and single-purpose. Extract reusable UI controls into src/components/ui.
 
-    State Updates: Always immutable updates when modifying localStorage state arrays (dogs, pantry items, meal plans). Persist only through AppContext → `src/utils/storage.js` (never sprinkle raw `localStorage` calls in feature UI).
+    State Updates: Always immutable updates when modifying localStorage state arrays (dogs, catalog/care items, menus, logs). Persist only through AppContext → `src/utils/storage.js` (never sprinkle raw `localStorage` calls in feature UI). Prefer logging-first flows: creating Food / Med / Supplement items should usually happen from a quick log, then land in the shared catalog.
 
     Safe areas: Respect `env(safe-area-inset-*)` for notch / home-indicator padding on installable fullscreen shells.
 
-    Print Styling: Use print:hidden for navigation/interactive elements and dedicated print:block styles for the P3 Dogsitter Care Sheet.
+    Print Styling: Use print:hidden for navigation/interactive elements; reserved for later care-handoff / printable notes (not a P1–P2 requirement).
 
     Graceful Fallbacks: Ensure empty states have delightful micro-copy and clear primary call-to-action buttons.
 

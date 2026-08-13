@@ -16,11 +16,11 @@ export default function Home() {
           Ruffly
         </p>
         <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-slate-800 sm:text-3xl">
-          Precision nutrition for your pup
+          Daily care for your pack
         </h1>
         <p className="mt-3 max-w-md text-base leading-relaxed text-slate-500">
-          Dial in daily calories, keep a pantry of real foods, balance the bowl,
-          and pack a trip care sheet — all on your phone.
+          Log meals, meds, and weight for every dog you care for — see what&apos;s
+          due today, keep a simple menu, and finish profiles when you need them.
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-4">
           <Link

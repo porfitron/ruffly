@@ -85,7 +85,11 @@ export default function FoodItemForm({
     toNumberOrNull(form.kcalPerCup) ||
     toNumberOrNull(form.kcalPerCan)
 
-  const canSave = form.name.trim().length > 0 && hasDensity
+  const canSave =
+    form.brand.trim().length > 0 &&
+    form.name.trim().length > 0 &&
+    form.flavor.trim().length > 0 &&
+    hasDensity
   const isEditing = Boolean(editingFood)
   const fieldId = editingFood?.id ?? (addToBowl ? 'bowl-new' : 'new')
 
@@ -101,6 +105,7 @@ export default function FoodItemForm({
       id: editingFood?.id ?? createId('food'),
       brand: form.brand.trim(),
       name: form.name.trim(),
+      formula: form.name.trim(),
       flavor: form.flavor.trim(),
       category: form.category,
       kcalPerKg: toNumberOrNull(form.kcalPerKg),
@@ -184,8 +189,8 @@ export default function FoodItemForm({
             </h2>
             <p className="mt-1 text-sm text-slate-500">
               {addToBowl
-                ? 'Saved to My Pantry and mixed into this bowl automatically.'
-                : 'Save density + a reorder link so the bowl balancer can portion precisely.'}
+                ? 'Saved to your catalog and mixed into this bowl automatically.'
+                : 'Brand, formula, flavor, and calories from the label.'}
             </p>
           </div>
           {isEditing || (!isEditing && pantry.length > 0) ? (
@@ -213,6 +218,7 @@ export default function FoodItemForm({
             value={form.brand}
             onChange={(e) => update('brand', e.target.value)}
             placeholder="Orijen"
+            required
           />
         </Field>
 
@@ -234,6 +240,7 @@ export default function FoodItemForm({
             value={form.flavor}
             onChange={(e) => update('flavor', e.target.value)}
             placeholder="Chicken"
+            required
           />
         </Field>
 

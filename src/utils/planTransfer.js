@@ -1,5 +1,10 @@
 import { zlibSync, unzlibSync, strToU8, strFromU8 } from 'fflate'
-import { DEFAULT_APP_DATA } from './storage'
+import { DEFAULT_APP_DATA, pantryFromCatalog } from './storage'
+
+function pantryForTransfer(state) {
+  if (Array.isArray(state.pantry) && state.pantry.length > 0) return state.pantry
+  return pantryFromCatalog(state.catalog)
+}
 
 export const PLAN_QR_PREFIX_V1 = 'ruffly1:'
 export const PLAN_QR_PREFIX = 'ruffly2:'
@@ -99,7 +104,7 @@ function toCompact(state) {
       Number(dog.mealsPerDay) === 1 ? 1 : 2,
       dog.slug || null,
     ]),
-    p: (state.pantry ?? []).map((food) => [
+    p: pantryForTransfer(state).map((food) => [
       food.id,
       food.name ?? '',
       food.brand || null,
@@ -217,7 +222,7 @@ export function encodePlanForQr(state) {
 
 export function summarizePlan(plan) {
   const dogs = plan.dogs ?? []
-  const pantry = plan.pantry ?? []
+  const pantry = pantryForTransfer(plan)
   const byDog = plan.mealPlansByDogId ?? {}
   const mealItemCount = Object.values(byDog).reduce(
     (sum, planItems) => sum + (planItems?.length ?? 0),
