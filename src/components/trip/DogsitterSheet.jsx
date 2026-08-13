@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ExternalLink, Printer } from 'lucide-react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
@@ -8,6 +8,11 @@ import {
   resolveActiveFeedingPlan,
   resolveMealSessions,
 } from '../../utils/calculations'
+import {
+  formatSlotLabel,
+  kindLabel,
+  slotSortKey,
+} from '../../utils/todayCare'
 
 function formatMealParts(servings, meal) {
   const parts = []
@@ -60,8 +65,109 @@ function ContactBlock({ label, name, phone, email }) {
   )
 }
 
-function CareSheetDocument({ dog, pantry, mealPlan, preparedOn }) {
+function menuRowsForDog(catalog, menu) {
+  const byId = new Map((catalog ?? []).map((item) => [item.id, item]))
+  return (menu ?? [])
+    .map((item) => {
+      const careItem = byId.get(item.careItemId)
+      if (!careItem) return null
+      const amount = item.amount ?? careItem.defaultAmount
+      const unit = item.unit ?? careItem.unit
+      return {
+        id: item.id,
+        kind: careItem.kind,
+        name: careItem.formula || careItem.name,
+        brand: careItem.brand,
+        flavor: careItem.flavor,
+        slot: item.slot ?? 'daily',
+        amount,
+        unit,
+        productUrl: careItem.productUrl,
+      }
+    })
+    .filter(Boolean)
+}
+
+function groupMenuBySlot(rows) {
+  const groups = new Map()
+  for (const row of rows) {
+    const slot = row.slot ?? 'daily'
+    if (!groups.has(slot)) groups.set(slot, [])
+    groups.get(slot).push(row)
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => slotSortKey(a) - slotSortKey(b))
+    .map(([slot, items]) => ({
+      slot,
+      label: formatSlotLabel(slot),
+      items,
+    }))
+}
+
+function formatMenuAmount(amount, unit) {
+  if (amount == null || amount === '') return ''
+  return `${amount}${unit ? ` ${unit}` : ''}`
+}
+
+function ProfileDetails({ dog, catalog }) {
+  const medNeeds = (dog.medicationNeedIds ?? [])
+    .map((id) => (catalog ?? []).find((item) => item.id === id))
+    .filter(Boolean)
+  const fields = [
+    dog.behaviorNotes?.trim()
+      ? { label: 'Behavior', value: dog.behaviorNotes.trim() }
+      : null,
+    dog.licenseNumber?.trim()
+      ? { label: 'License', value: dog.licenseNumber.trim() }
+      : null,
+    dog.vaccineInfo?.trim()
+      ? { label: 'Vaccines', value: dog.vaccineInfo.trim() }
+      : null,
+    dog.microchipId?.trim()
+      ? { label: 'Microchip', value: dog.microchipId.trim() }
+      : null,
+    medNeeds.length > 0
+      ? {
+          label: 'Medication needs',
+          value: medNeeds.map((item) => item.name).join(', '),
+        }
+      : null,
+  ].filter(Boolean)
+
+  if (fields.length === 0) return null
+
+  return (
+    <section>
+      <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">
+        About {dog.name}
+      </h3>
+      <dl className="mt-3 space-y-3">
+        {fields.map((field) => (
+          <div key={field.label}>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              {field.label}
+            </dt>
+            <dd className="mt-0.5 whitespace-pre-wrap text-sm text-slate-700">
+              {field.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
+}
+
+function CareSheetDocument({
+  dog,
+  pantry,
+  mealPlan,
+  catalog,
+  menu,
+  preparedOn,
+}) {
   const care = dog.careInfo ?? {}
+  const menuRows = menuRowsForDog(catalog, menu)
+  const menuGroups = groupMenuBySlot(menuRows)
   const feedingPlan = resolveActiveFeedingPlan(dog, pantry, mealPlan)
   const mealFoods = feedingPlan.filter((item) => !isTreat(item))
   const treatFoods = feedingPlan.filter(isTreat)
@@ -76,6 +182,19 @@ function CareSheetDocument({ dog, pantry, mealPlan, preparedOn }) {
     (sum, item) => sum + (Number(item.servings.grams) || 0),
     0,
   )
+  const reorderItems = [
+    ...menuRows.filter((row) => row.productUrl),
+    ...feedingPlan
+      .filter((item) => item.food.productUrl)
+      .filter(
+        (item) => !menuRows.some((row) => row.productUrl === item.food.productUrl),
+      )
+      .map((item) => ({
+        id: `reorder-${item.food.id}`,
+        name: item.food.name,
+        productUrl: item.food.productUrl,
+      })),
+  ]
 
   return (
     <Card className="dogsitter-sheet space-y-5 print:rounded-none print:border print:border-slate-200 print:p-8 print:shadow-none">
@@ -84,7 +203,7 @@ function CareSheetDocument({ dog, pantry, mealPlan, preparedOn }) {
           Ruffly
         </p>
         <h2 className="mt-1 text-2xl font-extrabold text-slate-800">
-          Care sheet for {dog.name}
+          Care Guide for {dog.name}
         </h2>
         <p className="mt-1 text-sm text-slate-500">Prepared {preparedOn}</p>
       </header>
@@ -108,12 +227,69 @@ function CareSheetDocument({ dog, pantry, mealPlan, preparedOn }) {
 
       <section>
         <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">
-          Feeding schedule
+          {menuRows.length > 0 ? 'Daily care' : 'Feeding schedule'}
         </h3>
-        {feedingPlan.length === 0 ? (
+        {menuRows.length > 0 ? (
+          <div className="mt-3 space-y-3">
+            {menuGroups.map((group) => (
+              <div
+                key={group.slot}
+                className="rounded-2xl border border-amber-100 p-3"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  {group.label}
+                </p>
+                <ul className="mt-2 space-y-2">
+                  {group.items.map((item) => {
+                    const amountLabel = formatMenuAmount(item.amount, item.unit)
+                    const subtitle = [kindLabel(item.kind), item.brand, item.flavor]
+                      .filter(Boolean)
+                      .join(' · ')
+                    return (
+                      <li
+                        key={item.id}
+                        className="rounded-xl bg-[#FBF9F5] px-3 py-2 print:bg-slate-50"
+                      >
+                        <p className="font-bold text-slate-800">{item.name}</p>
+                        {subtitle ? (
+                          <p className="text-xs text-slate-500">{subtitle}</p>
+                        ) : null}
+                        {amountLabel ? (
+                          <p className="mt-1 text-sm font-bold text-slate-800">
+                            {amountLabel}
+                          </p>
+                        ) : null}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            ))}
+            {reorderItems.length > 0 ? (
+              <ul className="space-y-2">
+                {reorderItems.map((item) => (
+                  <li key={`reorder-${item.id}`}>
+                    <a
+                      href={item.productUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#F59E0B] print:text-slate-700"
+                    >
+                      Reorder {item.name}
+                      <ExternalLink size={12} />
+                    </a>
+                    <p className="break-all text-xs text-slate-400 print:block">
+                      {item.productUrl}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : feedingPlan.length === 0 ? (
           <p className="mt-2 text-sm text-slate-500">
-            No bowl plan yet — add foods in the Pantry, then set portions on the
-            Bowl tab.
+            No daily menu yet — add foods, meds, or supplements on Pack, then
+            they will print here.
           </p>
         ) : (
           <div className="mt-3 space-y-3">
@@ -212,6 +388,8 @@ function CareSheetDocument({ dog, pantry, mealPlan, preparedOn }) {
         )}
       </section>
 
+      <ProfileDetails dog={dog} catalog={catalog} />
+
       <section>
         <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">
           Contacts
@@ -242,7 +420,7 @@ function CareSheetDocument({ dog, pantry, mealPlan, preparedOn }) {
         !care.vetName &&
         !care.vetPhone ? (
           <p className="mt-2 text-sm text-slate-500 print:hidden">
-            Add contacts above so they appear on the printed sheet.
+            Add contacts above so they appear on the printed care guide.
           </p>
         ) : null}
       </section>
@@ -274,12 +452,21 @@ function sortDogsByName(dogs) {
   )
 }
 
-/** P3 — Print-optimized dogsitter care sheet */
+/** Print-optimized care guide for sitters */
 export default function DogsitterSheet() {
-  const { activeDog, dogs, pantry, mealPlansByDogId, currentMealPlan } =
-    useApp()
+  const {
+    activeDog,
+    dogs,
+    pantry,
+    catalog,
+    mealPlansByDogId,
+    menusByDogId,
+    currentMealPlan,
+    currentMenu,
+  } = useApp()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [printScope, setPrintScope] = useState('active') // 'active' | 'all'
+  const printTitleRef = useRef(null)
 
   const today = new Date().toLocaleDateString(undefined, {
     year: 'numeric',
@@ -293,6 +480,10 @@ export default function DogsitterSheet() {
   useEffect(() => {
     function clearPrintAttr() {
       document.documentElement.removeAttribute('data-print-dogs')
+      if (printTitleRef.current != null) {
+        document.title = printTitleRef.current
+        printTitleRef.current = null
+      }
     }
 
     function onAfterPrint() {
@@ -324,9 +515,7 @@ export default function DogsitterSheet() {
   if (!activeDog) {
     return (
       <Card className="text-center print:hidden">
-        <h2 className="text-xl font-bold text-slate-800">
-          Dogsitter care sheet
-        </h2>
+        <h2 className="text-xl font-bold text-slate-800">Care Guide</h2>
         <p className="mt-2 text-sm text-slate-500">
           Add a pup profile to generate a printable care guide.
         </p>
@@ -341,6 +530,13 @@ export default function DogsitterSheet() {
     // Set synchronously on the DOM (not React state) so Safari/iOS — where
     // window.print() returns immediately — still has every sheet visible to
     // the print capture. Cleared on afterprint / print media-query exit.
+    if (printTitleRef.current == null) {
+      printTitleRef.current = document.title
+    }
+    document.title =
+      scope === 'all'
+        ? 'Care Guide — Pack'
+        : `Care Guide — ${activeDog.name}`
     document.documentElement.setAttribute('data-print-dogs', scope)
     window.requestAnimationFrame(() => {
       window.print()
@@ -358,7 +554,7 @@ export default function DogsitterSheet() {
           }}
         >
           <Printer size={18} />
-          Print care sheet
+          Print / Save PDF
         </Button>
       </div>
 
@@ -368,6 +564,8 @@ export default function DogsitterSheet() {
           dog={activeDog}
           pantry={pantry}
           mealPlan={currentMealPlan}
+          catalog={catalog}
+          menu={currentMenu}
           preparedOn={today}
         />
       </div>
@@ -381,6 +579,8 @@ export default function DogsitterSheet() {
                 dog={dog}
                 pantry={pantry}
                 mealPlan={mealPlansByDogId?.[dog.id] ?? []}
+                catalog={catalog}
+                menu={menusByDogId?.[dog.id] ?? []}
                 preparedOn={today}
               />
             </div>
@@ -390,14 +590,14 @@ export default function DogsitterSheet() {
 
       <Modal
         open={confirmOpen}
-        title="Print care sheet?"
+        title="Print Care Guide?"
         onClose={() => {
           setConfirmOpen(false)
           setPrintScope('active')
         }}
       >
         <p className="text-sm text-slate-500">
-          Choose whose care sheet to send to the printer.
+          Choose whose care guide to print or save as PDF.
         </p>
 
         <fieldset className="mt-4 space-y-2">
@@ -466,7 +666,7 @@ export default function DogsitterSheet() {
           </Button>
           <Button className="flex-1" onClick={handleConfirmPrint}>
             <Printer size={16} />
-            Print
+            Print PDF
           </Button>
         </div>
       </Modal>

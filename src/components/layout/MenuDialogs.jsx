@@ -6,9 +6,10 @@ import Button from '../ui/Button'
 import { useApp } from '../../context/AppContext'
 import { DEFAULT_APP_DATA, clearAppData } from '../../utils/storage'
 import {
-  encodePlanForQr,
-  decodePlan,
+  encodePlanFrames,
+  createPlanChunkCollector,
   summarizePlan,
+  QR_CYCLE_MS,
 } from '../../utils/planTransfer'
 
 function planStateFromApp(app) {
@@ -21,27 +22,35 @@ function planStateFromApp(app) {
   }
 }
 
+const QR_RENDER_OPTIONS = {
+  errorCorrectionLevel: 'M',
+  margin: 2,
+  width: 360,
+  color: { dark: '#0f172a', light: '#ffffff' },
+}
+
 function SharePlanDialog({ open, onClose }) {
   const app = useApp()
-  const [qrUrl, setQrUrl] = useState('')
+  const [qrUrls, setQrUrls] = useState([])
+  const [frameIndex, setFrameIndex] = useState(0)
+  const [paused, setPaused] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!open) return undefined
     let cancelled = false
-    setQrUrl('')
+    setQrUrls([])
+    setFrameIndex(0)
+    setPaused(false)
     setError('')
 
     ;(async () => {
       try {
-        const payload = encodePlanForQr(planStateFromApp(app))
-        const url = await QRCode.toDataURL(payload, {
-          errorCorrectionLevel: 'M',
-          margin: 2,
-          width: 360,
-          color: { dark: '#0f172a', light: '#ffffff' },
-        })
-        if (!cancelled) setQrUrl(url)
+        const { frames } = encodePlanFrames(planStateFromApp(app))
+        const urls = await Promise.all(
+          frames.map((payload) => QRCode.toDataURL(payload, QR_RENDER_OPTIONS)),
+        )
+        if (!cancelled) setQrUrls(urls)
       } catch (err) {
         if (!cancelled) setError(err.message || 'Could not create QR code.')
       }
@@ -52,28 +61,73 @@ function SharePlanDialog({ open, onClose }) {
     }
   }, [open, app.dogs, app.pantry, app.mealPlansByDogId, app.tripSettings, app.activeDogId])
 
+  const cycling = qrUrls.length > 1 && !paused
+
+  useEffect(() => {
+    if (!open || !cycling) return undefined
+    const timer = window.setInterval(() => {
+      setFrameIndex((current) => (current + 1) % qrUrls.length)
+    }, QR_CYCLE_MS)
+    return () => window.clearInterval(timer)
+  }, [open, cycling, qrUrls.length])
+
+  const qrUrl = qrUrls[frameIndex] ?? ''
+  const multi = qrUrls.length > 1
+
   return (
     <Modal open={open} title="Share Plan" onClose={onClose}>
       <p className="text-sm text-slate-500">
-        Have the other person open Receive Plan and scan this code. Turn up
-        screen brightness and hold the phones steady.
+        {multi
+          ? 'Codes cycle until the other phone has the full plan. Turn up brightness and hold steady. Pause if they need more time on one code.'
+          : 'Have the other person open Receive Plan and scan this code. Turn up screen brightness and hold the phones steady.'}
       </p>
       {error ? (
         <p className="mt-4 text-sm text-red-600">{error}</p>
       ) : (
-        <div className="mt-4 flex justify-center rounded-3xl bg-white p-3">
-          {qrUrl ? (
-            <img
-              src={qrUrl}
-              alt="Ruffly plan QR code"
-              className="h-72 w-72"
-            />
-          ) : (
-            <div className="flex h-72 w-72 items-center justify-center text-sm text-slate-400">
-              Generating…
-            </div>
-          )}
-        </div>
+        <>
+          <div className="mt-4 flex justify-center rounded-3xl bg-white p-3">
+            {qrUrl ? (
+              <img
+                src={qrUrl}
+                alt={
+                  multi
+                    ? `Ruffly plan QR code ${frameIndex + 1} of ${qrUrls.length}`
+                    : 'Ruffly plan QR code'
+                }
+                className="h-72 w-72"
+              />
+            ) : (
+              <div className="flex h-72 w-72 items-center justify-center text-sm text-slate-400">
+                Generating…
+              </div>
+            )}
+          </div>
+          {multi ? (
+            <>
+              <p className="mt-3 text-center text-sm font-medium text-slate-700" aria-live="polite">
+                Code {frameIndex + 1} of {qrUrls.length}
+              </p>
+              <div className="mt-3 flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="h-10 flex-1"
+                  onClick={() => setPaused((value) => !value)}
+                >
+                  {paused ? 'Resume' : 'Pause'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="h-10 flex-1"
+                  onClick={() =>
+                    setFrameIndex((current) => (current + 1) % qrUrls.length)
+                  }
+                >
+                  Next
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </>
       )}
     </Modal>
   )
@@ -84,15 +138,21 @@ function ReceivePlanDialog({ open, onClose }) {
   const [error, setError] = useState('')
   const [pendingPlan, setPendingPlan] = useState(null)
   const [cameraReady, setCameraReady] = useState(false)
+  const [progress, setProgress] = useState(null)
   const scannerRef = useRef(null)
+  const collectorRef = useRef(null)
   const handledRef = useRef(false)
+  const progressRef = useRef(null)
 
   useEffect(() => {
     if (!open || pendingPlan) return undefined
 
     handledRef.current = false
+    collectorRef.current = createPlanChunkCollector()
+    progressRef.current = null
     setError('')
     setCameraReady(false)
+    setProgress(null)
 
     const scanner = new Html5Qrcode('ruffly-qr-reader')
     scannerRef.current = scanner
@@ -114,13 +174,26 @@ function ReceivePlanDialog({ open, onClose }) {
             disableFlip: false,
           },
           (decoded) => {
-            if (handledRef.current || cancelled) return
-            try {
-              const plan = decodePlan(decoded)
+            if (handledRef.current || cancelled || !collectorRef.current) return
+            const result = collectorRef.current.add(decoded)
+            if (result.status === 'complete') {
               handledRef.current = true
-              setPendingPlan(plan)
-            } catch (err) {
-              setError(err.message || 'That QR code is not a Ruffly plan.')
+              setError('')
+              setPendingPlan(result.plan)
+              return
+            }
+            if (result.status === 'collecting') {
+              setError('')
+              const next = { got: result.got, total: result.total }
+              const prev = progressRef.current
+              if (!prev || prev.got !== next.got || prev.total !== next.total) {
+                progressRef.current = next
+                setProgress(next)
+              }
+              return
+            }
+            if (result.status === 'error') {
+              setError(result.error)
             }
           },
           () => {},
@@ -154,6 +227,7 @@ function ReceivePlanDialog({ open, onClose }) {
     setPendingPlan(null)
     setError('')
     setCameraReady(false)
+    setProgress(null)
     onClose()
   }
 
@@ -201,6 +275,7 @@ function ReceivePlanDialog({ open, onClose }) {
             onClick={() => {
               handledRef.current = false
               setPendingPlan(null)
+              setProgress(null)
               setError('')
             }}
           >
@@ -214,11 +289,27 @@ function ReceivePlanDialog({ open, onClose }) {
   return (
     <Modal open={open} title="Receive Plan" onClose={close}>
       <p className="text-sm text-slate-500">
-        Point your camera at a Ruffly Share Plan QR code.
+        Point your camera at a Ruffly Share Plan QR code. Larger plans send
+        several codes in a loop — keep scanning until this screen fills in.
       </p>
       <div className="mt-4 overflow-hidden rounded-3xl bg-slate-900">
         <div id="ruffly-qr-reader" className="min-h-56 w-full" />
       </div>
+      {progress ? (
+        <div className="mt-3">
+          <p className="text-sm font-medium text-slate-700" aria-live="polite">
+            {progress.got} of {progress.total} frames
+          </p>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-[#F59E0B] transition-all"
+              style={{
+                width: `${Math.round((progress.got / progress.total) * 100)}%`,
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
       {!cameraReady && !error ? (
         <p className="mt-3 text-sm text-slate-400">Starting camera…</p>
       ) : null}

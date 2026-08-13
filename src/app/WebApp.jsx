@@ -9,12 +9,14 @@ import QuickLogSheet, {
   MenuEditorSheet,
 } from '../components/log/QuickLogSheet'
 import CatalogTab from '../components/catalog/CatalogTab'
+import CareGuideTab from '../components/trip/CareGuideTab'
 import { useApp } from '../context/AppContext'
 
 const SUBTITLES = {
   today: 'What your pack needs today',
   pack: 'Dogs, menus & profiles',
   pantry: 'Food, meds & supplements library',
+  care: 'Printable notes for a sitter',
 }
 
 function isOwnerAccountIncomplete(ownerAccount) {
@@ -65,6 +67,11 @@ export default function WebApp() {
       id: 'catalog',
       label: 'Catalog',
       onClick: () => handleTabChange('pantry'),
+    },
+    {
+      id: 'care',
+      label: 'Care Guide',
+      onClick: () => handleTabChange('care'),
     },
     { id: 'share', label: 'Share Plan', onClick: () => setMenuDialog('share') },
     {
@@ -120,6 +127,8 @@ export default function WebApp() {
         )}
 
         {activeTab === 'pantry' && <CatalogTab />}
+
+        {activeTab === 'care' && <CareGuideTab />}
       </main>
 
       <div className="print:hidden">
@@ -130,7 +139,7 @@ export default function WebApp() {
             onLog={() => setLogOpen(true)}
           />
         )}
-        {activeTab === 'pantry' ? (
+        {activeTab === 'pantry' || activeTab === 'care' ? (
           <div className="fixed inset-x-0 bottom-0 border-t border-amber-100 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
             <button
               type="button"

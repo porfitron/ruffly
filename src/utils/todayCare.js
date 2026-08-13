@@ -53,7 +53,7 @@ function catalogById(catalog) {
   return map
 }
 
-function slotSortKey(slot) {
+export function slotSortKey(slot) {
   const order = {
     breakfast: 0,
     morning: 0,
@@ -69,7 +69,7 @@ function slotSortKey(slot) {
   return order[String(slot ?? 'daily').toLowerCase()] ?? 6
 }
 
-function formatSlotLabel(slot) {
+export function formatSlotLabel(slot) {
   const raw = String(slot ?? 'daily')
   if (raw === 'as_needed') return 'As needed'
   return raw.charAt(0).toUpperCase() + raw.slice(1)

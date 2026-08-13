@@ -8,8 +8,14 @@ function pantryForTransfer(state) {
 
 export const PLAN_QR_PREFIX_V1 = 'ruffly1:'
 export const PLAN_QR_PREFIX = 'ruffly2:'
-/** Keep codes coarse enough for phone-to-phone scanning. */
-export const MAX_QR_BYTES = 900
+/** Numbered chunks: ruffly3:{session}:{index}:{total}:{chunk} */
+export const PLAN_QR_PREFIX_V3 = 'ruffly3:'
+/** Byte-mode QR ~v8–v10 at ECC M — coarse enough for phone-to-phone. */
+export const QR_CHUNK_CHARS = 240
+/** Slow enough for html5-qrcode to lock onto each frame. */
+export const QR_CYCLE_MS = 400
+/** Compressed payload ceiling after chunking removes the old 900-byte QR cap. */
+export const MAX_PLAN_COMPRESSED_BYTES = 12 * 1024
 
 function trimCareInfo(careInfo) {
   if (!careInfo || typeof careInfo !== 'object') return null
@@ -115,7 +121,7 @@ function toCompact(state) {
       food.flavor || null,
       food.proteinPercent ?? null,
       food.fatPercent ?? null,
-      // productUrl omitted — long URLs make QRs unscannable
+      food.productUrl || null,
     ]),
     M: mealPlansToCompact(state),
     t: [
@@ -163,6 +169,7 @@ function fromCompact(compact) {
         ...(row[7] ? { flavor: row[7] } : {}),
         ...(row[8] != null ? { proteinPercent: row[8] } : {}),
         ...(row[9] != null ? { fatPercent: row[9] } : {}),
+        ...(row[10] ? { productUrl: row[10] } : {}),
       })),
       mealPlansByDogId: mealPlansFromCompact(compact, activeDogId),
       tripSettings: {
@@ -210,14 +217,143 @@ export function buildPlanPayload(state) {
 export function encodePlanForQr(state) {
   const compact = toCompact(state)
   const compressed = zlibSync(strToU8(JSON.stringify(compact)), { level: 9 })
-  const payload = `${PLAN_QR_PREFIX}${bytesToBase64Url(compressed)}`
-  const bytes = new TextEncoder().encode(payload).length
-  if (bytes > MAX_QR_BYTES) {
+  if (compressed.byteLength > MAX_PLAN_COMPRESSED_BYTES) {
     throw new Error(
-      'This plan is too large for a scannable QR code. Remove some pantry items and try again.',
+      'This plan is too large to share. Try shortening notes or removing pantry items.',
     )
   }
-  return payload
+  return `${PLAN_QR_PREFIX}${bytesToBase64Url(compressed)}`
+}
+
+function splitChunks(value, size) {
+  if (!value) return ['']
+  const chunks = []
+  for (let i = 0; i < value.length; i += size) {
+    chunks.push(value.slice(i, i + size))
+  }
+  return chunks
+}
+
+function newFrameSession() {
+  return crypto.randomUUID().replaceAll('-', '').slice(0, 8)
+}
+
+/**
+ * One or more QR payloads for Share Plan.
+ * Small plans stay a single ruffly2 code (older receivers still work).
+ * Larger plans become a looping ruffly3 chunk sequence.
+ */
+export function encodePlanFrames(state) {
+  const payload = encodePlanForQr(state)
+  const body = payload.slice(PLAN_QR_PREFIX.length)
+  const chunks = splitChunks(body, QR_CHUNK_CHARS)
+  if (chunks.length <= 1) {
+    return { frames: [payload], count: 1, session: null }
+  }
+
+  const session = newFrameSession()
+  const total = chunks.length
+  const frames = chunks.map(
+    (chunk, index) =>
+      `${PLAN_QR_PREFIX_V3}${session}:${index}:${total}:${chunk}`,
+  )
+  return { frames, count: total, session }
+}
+
+function parseChunkFrame(raw) {
+  if (!raw.startsWith(PLAN_QR_PREFIX_V3)) return null
+  const rest = raw.slice(PLAN_QR_PREFIX_V3.length)
+  const sessionEnd = rest.indexOf(':')
+  const indexEnd = rest.indexOf(':', sessionEnd + 1)
+  const totalEnd = rest.indexOf(':', indexEnd + 1)
+  if (sessionEnd < 1 || indexEnd < 0 || totalEnd < 0) return null
+
+  const session = rest.slice(0, sessionEnd)
+  const index = Number(rest.slice(sessionEnd + 1, indexEnd))
+  const total = Number(rest.slice(indexEnd + 1, totalEnd))
+  const chunk = rest.slice(totalEnd + 1)
+
+  if (!/^[A-Za-z0-9]+$/.test(session)) return null
+  if (!Number.isInteger(index) || !Number.isInteger(total)) return null
+  if (total < 2 || index < 0 || index >= total) return null
+  if (!chunk) return null
+
+  return { session, index, total, chunk }
+}
+
+function isLegacyPlanQr(raw) {
+  return (
+    raw.startsWith(PLAN_QR_PREFIX) ||
+    raw.startsWith(PLAN_QR_PREFIX_V1) ||
+    raw.startsWith('ruffly1.') ||
+    raw.startsWith('{')
+  )
+}
+
+/** Collects ruffly3 chunks (and still accepts a single ruffly2/v1 code). */
+export function createPlanChunkCollector() {
+  let session = null
+  let total = 0
+  const parts = new Map()
+
+  function resetSession(nextSession, nextTotal) {
+    session = nextSession
+    total = nextTotal
+    parts.clear()
+  }
+
+  return {
+    reset() {
+      resetSession(null, 0)
+    },
+    add(raw) {
+      const trimmed = String(raw ?? '').trim()
+      if (!trimmed) return { status: 'ignore' }
+
+      if (!trimmed.startsWith(PLAN_QR_PREFIX_V3)) {
+        if (!isLegacyPlanQr(trimmed)) return { status: 'ignore' }
+        try {
+          return { status: 'complete', plan: decodePlan(trimmed) }
+        } catch (err) {
+          return {
+            status: 'error',
+            error: err.message || 'That QR code is not a Ruffly plan.',
+          }
+        }
+      }
+
+      const frame = parseChunkFrame(trimmed)
+      if (!frame) {
+        return {
+          status: 'error',
+          error: 'That QR code is not a Ruffly plan.',
+        }
+      }
+
+      if (frame.session !== session || frame.total !== total) {
+        resetSession(frame.session, frame.total)
+      }
+      parts.set(frame.index, frame.chunk)
+      const got = parts.size
+      if (got !== total) {
+        return { status: 'collecting', got, total }
+      }
+
+      const body = Array.from({ length: total }, (_, i) => parts.get(i) ?? '').join(
+        '',
+      )
+      try {
+        const plan = decodePlan(`${PLAN_QR_PREFIX}${body}`)
+        return { status: 'complete', plan, got, total }
+      } catch (err) {
+        resetSession(null, 0)
+        return {
+          status: 'error',
+          error: err.message || 'Could not read that plan.',
+        }
+      }
+    },
+  }
 }
 
 export function summarizePlan(plan) {

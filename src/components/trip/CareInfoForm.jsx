@@ -92,7 +92,7 @@ export default function CareInfoForm() {
               {careSummary(activeDog.careInfo)}
             </p>
             <p className="mt-0.5 text-sm text-slate-500">
-              For {activeDog.name}&apos;s dogsitter sheet
+              For {activeDog.name}&apos;s care guide
             </p>
           </div>
           <span
@@ -113,7 +113,7 @@ export default function CareInfoForm() {
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-bold text-slate-800">Care contacts</h2>
           <p className="mt-1 text-sm text-slate-500">
-            These print on the dogsitter sheet for {activeDog.name}.
+            These print on the care guide for {activeDog.name}.
           </p>
         </div>
         {isComplete ? (
