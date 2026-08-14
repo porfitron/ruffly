@@ -58,13 +58,19 @@ export default defineConfig({
       registerType: 'autoUpdate',
       // Limit SW control to the web app so marketing pages stay uncached by the shell
       scope: appPath,
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: [
+        'favicon.svg',
+        'favicon-32x32.png',
+        'apple-touch-icon.png',
+        'og-image.png',
+        'sw-notifications.js',
+      ],
       manifest: {
         name: 'Ruffly',
         short_name: 'Ruffly',
         description:
           'Precision dog nutrition — calories, portions, pantry, and care sheets.',
-        theme_color: '#F59E0B',
+        theme_color: '#F2B833',
         background_color: '#FBF9F5',
         display: 'standalone',
         orientation: 'portrait-primary',
@@ -94,6 +100,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: 'index.html',
         navigateFallbackAllowlist: [/^\/web/],
+        importScripts: ['sw-notifications.js'],
         // Avoid workbox → terser crashes in some CI/sandbox environments
         mode: 'development',
       },

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import BrandMark from '../components/ui/BrandMark'
 
 /**
  * Marketing home placeholder — replace with the real landing when ready.
@@ -12,9 +13,12 @@ export default function Home() {
         aria-hidden
       />
       <main className="relative mx-auto flex min-h-dvh max-w-lg flex-col justify-center px-5 py-16">
-        <p className="text-4xl font-extrabold tracking-tight text-[#F59E0B] sm:text-5xl">
-          Ruffly
-        </p>
+        <div className="flex items-center gap-3">
+          <BrandMark className="h-14 w-14 shadow-sm sm:h-16 sm:w-16" />
+          <p className="text-4xl font-extrabold tracking-tight text-[#F59E0B] sm:text-5xl">
+            Ruffly
+          </p>
+        </div>
         <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-slate-800 sm:text-3xl">
           Daily care for your pack
         </h1>

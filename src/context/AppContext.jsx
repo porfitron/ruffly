@@ -27,7 +27,7 @@ import {
   readPupParam,
   uniqueDogSlug,
 } from '../utils/dogs'
-import { msUntilNextLocalMidnight, syncAppBadge } from '../utils/appBadge'
+import { msUntilNextLocalMidnight, syncHomeScreenBadge } from '../utils/appBadge'
 import { countPackDueTasks } from '../utils/todayCare'
 
 const AppContext = createContext(null)
@@ -545,7 +545,7 @@ export function AppProvider({ children }) {
     let midnightTimer
 
     function sync() {
-      syncAppBadge(
+      syncHomeScreenBadge(
         countPackDueTasks(
           state.dogs,
           state.menusByDogId,

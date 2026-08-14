@@ -3,21 +3,23 @@ import Card from '../ui/Card'
 import Button from '../ui/Button'
 import { useApp } from '../../context/AppContext'
 import {
+  badgePromptCopy,
   requestBadgeNotificationPermission,
-  shouldOfferIosBadgePermission,
-  syncAppBadge,
+  shouldOfferBadgePermission,
+  syncHomeScreenBadge,
 } from '../../utils/appBadge'
 import { countPackDueTasks } from '../../utils/todayCare'
 
 /**
- * iOS will not draw a Home Screen badge until Notification permission is
- * granted, and that prompt must come from a tap.
+ * iOS needs a tap to grant notification permission before setAppBadge draws.
+ * Android ignores setAppBadge and only dots the icon for an unread notification.
  */
 export default function HomeScreenBadgePrompt() {
   const { dogs, menusByDogId, catalog, logs, badgePromptDismissed, dispatch } =
     useApp()
   const [busy, setBusy] = useState(false)
-  const [visible, setVisible] = useState(() => shouldOfferIosBadgePermission())
+  const [visible, setVisible] = useState(() => shouldOfferBadgePermission())
+  const copy = badgePromptCopy()
 
   if (badgePromptDismissed || !visible) return null
 
@@ -31,7 +33,7 @@ export default function HomeScreenBadgePrompt() {
     const permission = await requestBadgeNotificationPermission()
     setBusy(false)
     if (permission === 'granted') {
-      await syncAppBadge(
+      await syncHomeScreenBadge(
         countPackDueTasks(dogs, menusByDogId, catalog, logs),
       )
     }
@@ -41,12 +43,8 @@ export default function HomeScreenBadgePrompt() {
   return (
     <Card className="print:hidden space-y-3">
       <div>
-        <p className="text-sm font-bold text-slate-800">Home Screen badge</p>
-        <p className="mt-1 text-sm text-slate-500">
-          iOS needs notification permission to show a count on the Ruffly icon
-          when Home dogs still have care due. We won&apos;t send alerts — just
-          the badge.
-        </p>
+        <p className="text-sm font-bold text-slate-800">{copy.title}</p>
+        <p className="mt-1 text-sm text-slate-500">{copy.body}</p>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button className="w-full" onClick={enable} disabled={busy}>

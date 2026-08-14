@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import BrandMark from '../components/ui/BrandMark'
 
 export default function About() {
   return (
@@ -8,9 +9,12 @@ export default function About() {
         aria-hidden
       />
       <main className="relative mx-auto max-w-lg px-5 pb-12 pt-[max(2rem,env(safe-area-inset-top))]">
-        <p className="text-4xl font-extrabold tracking-tight text-[#F59E0B]">
-          Ruffly
-        </p>
+        <div className="flex items-center gap-3">
+          <BrandMark className="h-14 w-14 shadow-sm" />
+          <p className="text-4xl font-extrabold tracking-tight text-[#F59E0B]">
+            Ruffly
+          </p>
+        </div>
         <h1 className="mt-6 text-2xl font-extrabold tracking-tight text-slate-800">
           Care logging for every dog you look after
         </h1>
