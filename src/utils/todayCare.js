@@ -266,6 +266,20 @@ export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new
   return groups
 }
 
+/** Incomplete Today rows for Home dogs only (Away dogs are skipped). */
+export function countPackDueTasks(
+  dogs,
+  menusByDogId,
+  catalog,
+  logs,
+  day = new Date(),
+) {
+  return buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day).reduce(
+    (sum, group) => sum + group.dueCount,
+    0,
+  )
+}
+
 export function kindLabel(kind) {
   if (kind === 'med') return 'Med'
   if (kind === 'supplement') return 'Supplement'

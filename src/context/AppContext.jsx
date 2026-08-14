@@ -27,6 +27,8 @@ import {
   readPupParam,
   uniqueDogSlug,
 } from '../utils/dogs'
+import { msUntilNextLocalMidnight, syncAppBadge } from '../utils/appBadge'
+import { countPackDueTasks } from '../utils/todayCare'
 
 const AppContext = createContext(null)
 
@@ -535,6 +537,38 @@ export function AppProvider({ children }) {
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [state.dogs, state.activeDogId])
+
+  // Home-screen icon badge: incomplete Today rows for Home dogs.
+  useEffect(() => {
+    let midnightTimer
+
+    function sync() {
+      syncAppBadge(
+        countPackDueTasks(
+          state.dogs,
+          state.menusByDogId,
+          state.catalog,
+          state.logs,
+        ),
+      )
+      window.clearTimeout(midnightTimer)
+      midnightTimer = window.setTimeout(sync, msUntilNextLocalMidnight())
+    }
+
+    sync()
+
+    function onVisible() {
+      if (document.visibilityState === 'visible') sync()
+    }
+
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', sync)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', sync)
+      window.clearTimeout(midnightTimer)
+    }
+  }, [state.dogs, state.menusByDogId, state.catalog, state.logs])
 
   const activeDog =
     state.dogs.find((dog) => dog.id === state.activeDogId) ?? null
