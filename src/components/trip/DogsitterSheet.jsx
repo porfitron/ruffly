@@ -467,6 +467,7 @@ export default function DogsitterSheet() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [printScope, setPrintScope] = useState('active') // 'active' | 'all'
   const printTitleRef = useRef(null)
+  const allowClearAtRef = useRef(0)
 
   const today = new Date().toLocaleDateString(undefined, {
     year: 'numeric',
@@ -486,28 +487,19 @@ export default function DogsitterSheet() {
       }
     }
 
-    function onAfterPrint() {
+    function maybeClear() {
+      // Chrome fires afterprint / a focus blip when the preview opens, before
+      // it snapshots. Ignore those so the pack packet stays in the PDF.
+      if (Date.now() < allowClearAtRef.current) return
       clearPrintAttr()
     }
-    function onPrintMqChange(event) {
-      if (!event.matches) clearPrintAttr()
-    }
 
-    const printMq = window.matchMedia('print')
-    window.addEventListener('afterprint', onAfterPrint)
-    if (typeof printMq.addEventListener === 'function') {
-      printMq.addEventListener('change', onPrintMqChange)
-    } else {
-      printMq.addListener(onPrintMqChange)
-    }
+    window.addEventListener('afterprint', maybeClear)
+    window.addEventListener('focus', maybeClear)
 
     return () => {
-      window.removeEventListener('afterprint', onAfterPrint)
-      if (typeof printMq.removeEventListener === 'function') {
-        printMq.removeEventListener('change', onPrintMqChange)
-      } else {
-        printMq.removeListener(onPrintMqChange)
-      }
+      window.removeEventListener('afterprint', maybeClear)
+      window.removeEventListener('focus', maybeClear)
       clearPrintAttr()
     }
   }, [])
@@ -529,7 +521,7 @@ export default function DogsitterSheet() {
     setPrintScope('active')
     // Set synchronously on the DOM (not React state) so Safari/iOS — where
     // window.print() returns immediately — still has every sheet visible to
-    // the print capture. Cleared on afterprint / print media-query exit.
+    // the print capture. Cleared on afterprint only (not print media-query).
     if (printTitleRef.current == null) {
       printTitleRef.current = document.title
     }
@@ -538,8 +530,12 @@ export default function DogsitterSheet() {
         ? 'Care Guide — Pack'
         : `Care Guide — ${activeDog.name}`
     document.documentElement.setAttribute('data-print-dogs', scope)
+    allowClearAtRef.current = Date.now() + 750
+    // Two frames: let the confirm modal unmount, then snapshot.
     window.requestAnimationFrame(() => {
-      window.print()
+      window.requestAnimationFrame(() => {
+        window.print()
+      })
     })
   }
 

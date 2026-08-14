@@ -1,19 +1,18 @@
 import { useState } from 'react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
+import { Field, SegmentedControl } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
 import { getDogProfileCompletion } from '../../utils/storage'
 import { kindLabel } from '../../utils/todayCare'
+import { isDogAway, sortPackDogs } from '../../utils/dogs'
 import DogSummaryCard from './DogSummaryCard'
 import ProfileEditor from './ProfileEditor'
 
-function sortDogsByName(dogs) {
-  return [...dogs].sort((a, b) =>
-    (a.name || '').localeCompare(b.name || '', undefined, {
-      sensitivity: 'base',
-    }),
-  )
-}
+const PRESENCE_OPTIONS = [
+  { value: 'home', label: 'Home' },
+  { value: 'away', label: 'Away' },
+]
 
 function menuSnippet(menu, catalog) {
   if (!menu?.length) return 'No menu yet'
@@ -27,13 +26,37 @@ function menuSnippet(menu, catalog) {
 }
 
 function DogPackDetail({ dog, onEditMenu, onEditProfile }) {
-  const { catalog, menusByDogId } = useApp()
+  const { catalog, menusByDogId, dispatch } = useApp()
   const menu = menusByDogId?.[dog.id] ?? []
   const completion = getDogProfileCompletion(dog)
   const missing = completion.fields.filter((f) => !f.done)
+  const away = isDogAway(dog)
+
+  function handlePresence(value) {
+    dispatch({
+      type: 'UPDATE_DOG_PROFILE',
+      payload: { id: dog.id, away: value === 'away' },
+    })
+  }
 
   return (
     <Card className="!p-4 space-y-3">
+      <Field
+        label="Routine"
+        hint={
+          away
+            ? 'Away dogs skip Today until you mark them home.'
+            : 'Pause the routine when this pup isn’t with you.'
+        }
+      >
+        <SegmentedControl
+          value={away ? 'away' : 'home'}
+          onChange={handlePresence}
+          options={PRESENCE_OPTIONS}
+          ariaLabel={`Routine for ${dog.name || 'this dog'}`}
+        />
+      </Field>
+
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-slate-800">Daily menu</p>
@@ -102,10 +125,10 @@ export default function DogsOverview({
   onAdded,
   onEditMenu,
 }) {
-  const { dogs } = useApp()
+  const { dogs, dispatch } = useApp()
   const [expandedDogId, setExpandedDogId] = useState(null)
   const [editingDogId, setEditingDogId] = useState(null)
-  const orderedDogs = sortDogsByName(dogs)
+  const orderedDogs = sortPackDogs(dogs)
 
   function handleSelect(id) {
     setEditingDogId(null)
@@ -145,7 +168,7 @@ export default function DogsOverview({
       <div className="px-0.5">
         <h2 className="text-lg font-bold text-slate-800">Your pack</h2>
         <p className="text-sm text-slate-500">
-          Tap a dog for menu and profile details.
+          Tap a dog for menu and profile. Pause visiting pups when they’re away.
         </p>
       </div>
 
@@ -161,7 +184,14 @@ export default function DogsOverview({
                 selected={expanded}
                 expanded={expanded}
                 portionSnippet={null}
+                showPresence
                 onSelect={() => handleSelect(dog.id)}
+                onTogglePresence={() =>
+                  dispatch({
+                    type: 'UPDATE_DOG_PROFILE',
+                    payload: { id: dog.id, away: !isDogAway(dog) },
+                  })
+                }
               />
               {expanded ? (
                 editing ? (

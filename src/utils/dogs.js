@@ -1,5 +1,26 @@
 /** Slug helpers for ?pup= deep links and dog switching. */
 
+export function isDogAway(dog) {
+  return Boolean(dog?.away)
+}
+
+export function sortDogsByName(dogs) {
+  return [...(dogs ?? [])].sort((a, b) =>
+    (a.name || '').localeCompare(b.name || '', undefined, {
+      sensitivity: 'base',
+    }),
+  )
+}
+
+/** Home dogs A–Z, then paused (away) dogs A–Z. */
+export function sortPackDogs(dogs) {
+  const named = sortDogsByName(dogs)
+  return [
+    ...named.filter((dog) => !isDogAway(dog)),
+    ...named.filter((dog) => isDogAway(dog)),
+  ]
+}
+
 export function slugifyName(name) {
   const slug = String(name ?? '')
     .trim()

@@ -37,6 +37,20 @@ export function formatPortionSnippet(feedingPlan) {
   return `${feedingPlan.length} foods in bowl`
 }
 
+function PresencePill({ away }) {
+  return (
+    <span
+      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+        away
+          ? 'bg-slate-100 text-slate-500'
+          : 'bg-emerald-50 text-[#10B981]'
+      }`}
+    >
+      {away ? 'away' : 'home'}
+    </span>
+  )
+}
+
 /**
  * Compact pup row: avatar + vitals.
  * Pack uses selected/expanded (no “Active” badge).
@@ -50,8 +64,11 @@ export default function DogSummaryCard({
   onSelect,
   onEdit,
   showActiveBadge = true,
+  showPresence = false,
+  onTogglePresence,
 }) {
   const name = dog.name?.trim() || 'Unnamed'
+  const away = Boolean(dog.away)
   const weight =
     dog.weight != null && dog.weight !== ''
       ? `${dog.weight} ${dog.weightUnit || 'lbs'}`
@@ -71,6 +88,9 @@ export default function DogSummaryCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-base font-bold text-slate-800">{name}</p>
+          {showPresence && !onTogglePresence ? (
+            <PresencePill away={away} />
+          ) : null}
           {showActiveBadge && active ? (
             <span className="shrink-0 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#F59E0B]">
               Active
@@ -101,7 +121,9 @@ export default function DogSummaryCard({
         {onSelect ? (
           <button
             type="button"
-            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            className={`flex min-w-0 flex-1 items-center gap-3 text-left ${
+              showPresence && away ? 'opacity-70' : ''
+            }`}
             onClick={onSelect}
             aria-label={
               typeof expanded === 'boolean'
@@ -119,6 +141,20 @@ export default function DogSummaryCard({
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-3">{body}</div>
         )}
+
+        {showPresence && onTogglePresence ? (
+          <button
+            type="button"
+            onClick={onTogglePresence}
+            className="flex h-11 shrink-0 items-center rounded-full px-1 hover:bg-slate-50"
+            aria-label={
+              away ? `Mark ${name} as home` : `Pause ${name}’s routine`
+            }
+            aria-pressed={away}
+          >
+            <PresencePill away={away} />
+          </button>
+        ) : null}
 
         {onEdit ? (
           <button

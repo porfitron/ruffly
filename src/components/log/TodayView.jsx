@@ -1,14 +1,51 @@
-import { Check, Circle, PawPrint, Plus } from 'lucide-react'
+import { Check, Circle, Minus, PawPrint, Plus } from 'lucide-react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
 import DogAvatar from '../profile/DogAvatar'
 import { useApp } from '../../context/AppContext'
+import { isDogAway } from '../../utils/dogs'
 import {
   buildPackTodayTasks,
   estimateFoodKcal,
   kindLabel,
 } from '../../utils/todayCare'
 
+function taskTitle(task) {
+  if (task.kind === 'food' && (task.brand || task.flavor)) {
+    return [task.brand, task.name, task.flavor].filter(Boolean).join(' · ')
+  }
+  return task.name
+}
+
+function taskAmount(task) {
+  if (task.amount == null) return ''
+  return `${task.amount}${task.unit ? ` ${task.unit}` : ''}`
+}
+
+function CheckButton({ done, partial, label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors ${
+        done
+          ? 'bg-[#10B981] text-white'
+          : partial
+            ? 'bg-amber-100 text-[#F59E0B] ring-1 ring-amber-200'
+            : 'bg-white text-slate-400 ring-1 ring-amber-200 hover:text-[#F59E0B]'
+      }`}
+      aria-label={label}
+    >
+      {done ? (
+        <Check size={20} strokeWidth={2.5} />
+      ) : partial ? (
+        <Minus size={20} strokeWidth={2.5} />
+      ) : (
+        <Circle size={20} />
+      )}
+    </button>
+  )
+}
 
 function KcalBar({ logged, target }) {
   if (!target || target <= 0) return null
@@ -32,6 +69,7 @@ function KcalBar({ logged, target }) {
 }
 
 function TaskRow({ task, onDone, onUndo }) {
+  const amount = taskAmount(task)
   return (
     <li
       className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 transition-colors ${
@@ -40,40 +78,113 @@ function TaskRow({ task, onDone, onUndo }) {
           : 'border-amber-100 bg-[#FBF9F5]'
       }`}
     >
-      <button
-        type="button"
+      <CheckButton
+        done={task.done}
+        label={task.done ? `Undo ${task.name}` : `Mark ${task.name} done`}
         onClick={() => (task.done ? onUndo?.(task) : onDone?.(task))}
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors ${
-          task.done
-            ? 'bg-[#10B981] text-white'
-            : 'bg-white text-slate-400 ring-1 ring-amber-200 hover:text-[#F59E0B]'
-        }`}
-        aria-label={
-          task.done
-            ? `Undo ${task.name}`
-            : `Mark ${task.name} done`
-        }
-      >
-        {task.done ? <Check size={20} strokeWidth={2.5} /> : <Circle size={20} />}
-      </button>
+      />
       <div className="min-w-0 flex-1">
         <p
           className={`truncate text-sm font-semibold ${
             task.done ? 'text-slate-500 line-through' : 'text-slate-800'
           }`}
         >
-          {task.kind === 'food' && (task.brand || task.flavor)
-            ? [task.brand, task.name, task.flavor].filter(Boolean).join(' · ')
-            : task.name}
+          {taskTitle(task)}
         </p>
         <p className="truncate text-xs text-slate-400">
           {kindLabel(task.kind)}
           {task.slotLabel ? ` · ${task.slotLabel}` : ''}
-          {task.amount != null
-            ? ` · ${task.amount}${task.unit ? ` ${task.unit}` : ''}`
-            : ''}
+          {amount ? ` · ${amount}` : ''}
         </p>
       </div>
+    </li>
+  )
+}
+
+function MealRow({ meal, onDone, onUndo, onItemDone, onItemUndo }) {
+  return (
+    <li
+      className={`rounded-2xl border px-3 py-2.5 transition-colors ${
+        meal.done
+          ? 'border-emerald-100 bg-emerald-50/60'
+          : 'border-amber-100 bg-[#FBF9F5]'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <CheckButton
+          done={meal.done}
+          partial={meal.partial}
+          label={
+            meal.done
+              ? `Undo ${meal.slotLabel}`
+              : `Mark ${meal.slotLabel} done`
+          }
+          onClick={() => (meal.done ? onUndo?.(meal) : onDone?.(meal))}
+        />
+        <div className="min-w-0 flex-1">
+          <p
+            className={`truncate text-sm font-semibold ${
+              meal.done ? 'text-slate-500 line-through' : 'text-slate-800'
+            }`}
+          >
+            {meal.slotLabel}
+          </p>
+          {meal.partial ? (
+            <p className="text-xs text-slate-400">
+              {meal.items.filter((item) => item.done).length} of{' '}
+              {meal.items.length} logged
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <ul className="mt-1">
+        {meal.items.map((item) => {
+          const amount = taskAmount(item)
+          const title = taskTitle(item)
+          return (
+            <li key={item.id}>
+              <button
+                type="button"
+                onClick={() =>
+                  item.done ? onItemUndo?.(item) : onItemDone?.(item)
+                }
+                className="flex min-h-11 w-full items-center gap-3 rounded-xl text-left hover:bg-white/80"
+                aria-label={item.done ? `Undo ${title}` : `Log ${title}`}
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center">
+                  <span
+                    className={item.done ? 'text-[#10B981]' : 'text-slate-300'}
+                  >
+                    {item.done ? (
+                      <Check size={16} strokeWidth={2.5} />
+                    ) : (
+                      <Circle size={16} />
+                    )}
+                  </span>
+                </span>
+                <span
+                  className={`min-w-0 flex-1 truncate text-sm ${
+                    item.done ? 'text-slate-400 line-through' : 'text-slate-600'
+                  }`}
+                >
+                  {title}
+                  {item.kind !== 'food' ? (
+                    <span className="text-xs text-slate-400">
+                      {' '}
+                      · {kindLabel(item.kind)}
+                    </span>
+                  ) : null}
+                </span>
+                {amount ? (
+                  <span className="shrink-0 tabular-nums text-xs text-slate-400">
+                    {amount}
+                  </span>
+                ) : null}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
     </li>
   )
 }
@@ -87,10 +198,11 @@ export default function TodayView({
 }) {
   const { dogs, catalog, menusByDogId, logs, dispatch } = useApp()
   const groups = buildPackTodayTasks(dogs, menusByDogId, catalog, logs)
+  const homeDogs = dogs.filter((dog) => !isDogAway(dog))
   const totalDue = groups.reduce((sum, g) => sum + g.dueCount, 0)
   const totalTasks = groups.reduce((sum, g) => sum + g.tasks.length, 0)
 
-  function handleDone(task) {
+  function logTask(task) {
     const careItem = (catalog ?? []).find((c) => c.id === task.careItemId)
     const amount = task.amount
     const kcal =
@@ -110,17 +222,27 @@ export default function TodayView({
     })
   }
 
+  function handleDone(task) {
+    logTask(task)
+  }
+
   function handleUndo(task) {
-    const match = (logs ?? [])
-      .filter(
-        (log) =>
-          log.dogId === task.dogId &&
-          (log.menuItemId === task.menuItemId ||
-            log.careItemId === task.careItemId),
-      )
-      .sort((a, b) => String(b.loggedAt).localeCompare(String(a.loggedAt)))[0]
-    if (match) {
-      dispatch({ type: 'DELETE_LOG', payload: match.id })
+    if (task.doneLogId) {
+      dispatch({ type: 'DELETE_LOG', payload: task.doneLogId })
+    }
+  }
+
+  function handleMealDone(meal) {
+    for (const item of meal.items) {
+      if (!item.done) logTask(item)
+    }
+  }
+
+  function handleMealUndo(meal) {
+    for (const item of meal.items) {
+      if (item.doneLogId) {
+        dispatch({ type: 'DELETE_LOG', payload: item.doneLogId })
+      }
     }
   }
 
@@ -139,6 +261,26 @@ export default function TodayView({
         </div>
         <Button className="w-full" onClick={onAddDog}>
           Add a dog
+        </Button>
+      </Card>
+    )
+  }
+
+  if (homeDogs.length === 0) {
+    return (
+      <Card className="space-y-4 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+          <PawPrint size={28} />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-800">Everyone’s away</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Paused dogs skip Today. Mark a pup as home from Pack when they’re
+            back with you.
+          </p>
+        </div>
+        <Button className="w-full" onClick={onOpenPack}>
+          Manage pack
         </Button>
       </Card>
     )
@@ -199,7 +341,7 @@ export default function TodayView({
       ) : null}
 
       <ul className="space-y-4">
-        {groups.map(({ dog, tasks, dueCount, kcalLogged, targetDER, hasMenu }) => (
+        {groups.map(({ dog, rows, dueCount, kcalLogged, targetDER, hasMenu }) => (
           <li key={dog.id}>
             <Card className="!p-4">
               <div className="mb-3 flex items-center gap-3">
@@ -245,14 +387,25 @@ export default function TodayView({
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {tasks.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      onDone={handleDone}
-                      onUndo={handleUndo}
-                    />
-                  ))}
+                  {rows.map((row) =>
+                    row.type === 'meal' ? (
+                      <MealRow
+                        key={row.id}
+                        meal={row}
+                        onDone={handleMealDone}
+                        onUndo={handleMealUndo}
+                        onItemDone={handleDone}
+                        onItemUndo={handleUndo}
+                      />
+                    ) : (
+                      <TaskRow
+                        key={row.id}
+                        task={row.task}
+                        onDone={handleDone}
+                        onUndo={handleUndo}
+                      />
+                    ),
+                  )}
                 </ul>
               )}
             </Card>

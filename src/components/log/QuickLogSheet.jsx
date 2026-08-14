@@ -496,29 +496,58 @@ export function MenuEditorSheet({ open, dogId, onClose, onDogChange }) {
     setCreateForm(emptyCreate(next))
   }
 
+  function parseAmount(value) {
+    const raw = String(value ?? '').trim()
+    if (!raw) return null
+    const n = Number(raw)
+    return Number.isFinite(n) ? n : null
+  }
+
+  function setMenuItems(items) {
+    if (!effectiveDogId) return
+    dispatch({
+      type: 'SET_DOG_MENU',
+      payload: { dogId: effectiveDogId, items },
+    })
+  }
+
   function addItem(careItem, amountOverride) {
     if (!effectiveDogId) return
     const amount =
       amountOverride != null && amountOverride !== ''
         ? Number(amountOverride)
         : careItem.defaultAmount
-    const next = [
+    const unit =
+      careItem.unit || (careItem.kind === 'food' ? 'g' : null)
+    setMenuItems([
       ...menu,
       {
         id: createId('menu'),
         careItemId: careItem.id,
         slot,
         amount: Number.isFinite(Number(amount)) ? Number(amount) : null,
-        unit: careItem.unit,
+        unit,
       },
-    ]
-    dispatch({
-      type: 'SET_DOG_MENU',
-      payload: { dogId: effectiveDogId, items: next },
-    })
+    ])
     setQuery('')
     setCreating(false)
     setCreateForm(emptyCreate(pickKind))
+  }
+
+  function updateItem(menuItemId, patch) {
+    setMenuItems(
+      menu.map((item) =>
+        item.id === menuItemId ? { ...item, ...patch } : item,
+      ),
+    )
+  }
+
+  function commitAmount(menuItem, raw, careKind) {
+    const amount = parseAmount(raw)
+    const patch = { amount }
+    if (!menuItem.unit && careKind === 'food') patch.unit = 'g'
+    if (menuItem.amount === amount && patch.unit == null) return
+    updateItem(menuItem.id, patch)
   }
 
   function createAndAdd() {
@@ -550,14 +579,7 @@ export function MenuEditorSheet({ open, dogId, onClose, onDogChange }) {
   }
 
   function removeItem(menuItemId) {
-    if (!effectiveDogId) return
-    dispatch({
-      type: 'SET_DOG_MENU',
-      payload: {
-        dogId: effectiveDogId,
-        items: menu.filter((item) => item.id !== menuItemId),
-      },
-    })
+    setMenuItems(menu.filter((item) => item.id !== menuItemId))
   }
 
   if (!open) return null
@@ -607,7 +629,7 @@ export function MenuEditorSheet({ open, dogId, onClose, onDogChange }) {
         )}
 
         <p className="text-sm text-slate-500">
-          Planned care for Today. Logging marks these done.
+          Planned care for Today. Set grams (or other amounts) on each item.
         </p>
 
         {menu.length === 0 ? (
@@ -619,33 +641,84 @@ export function MenuEditorSheet({ open, dogId, onClose, onDogChange }) {
           <ul className="space-y-2">
             {menu.map((item) => {
               const care = (catalog ?? []).find((c) => c.id === item.careItemId)
+              const kind = care?.kind ?? 'food'
               const title =
-                care?.kind === 'food'
+                kind === 'food'
                   ? foodListLabel(care)
                   : (care?.name ?? 'Unknown item')
+              const unit = item.unit || (kind === 'food' ? 'g' : '')
+              const amountLabel =
+                kind === 'food' && (!unit || unit === 'g') ? 'Grams' : 'Amount'
               return (
                 <li
                   key={item.id}
-                  className="flex items-center justify-between gap-2 rounded-2xl border border-amber-100 bg-[#FBF9F5] px-3 py-2.5"
+                  className="rounded-2xl border border-amber-100 bg-[#FBF9F5] px-3 py-2.5"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-800">
-                      {title}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {kindLabel(care?.kind ?? 'food')} · {item.slot}
-                      {item.amount != null
-                        ? ` · ${item.amount}${item.unit ? ` ${item.unit}` : ''}`
-                        : ''}
-                    </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-800">
+                        {title}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {kindLabel(kind)} · {item.slot}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      className="!h-10 shrink-0 px-3 text-red-500"
+                      onClick={() => removeItem(item.id)}
+                    >
+                      Remove
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    className="!h-10 shrink-0 px-3 text-red-500"
-                    onClick={() => removeItem(item.id)}
-                  >
-                    Remove
-                  </Button>
+                  <div className="mt-2 grid grid-cols-[1fr_5.5rem] gap-2">
+                    <Field
+                      label={amountLabel}
+                      htmlFor={`menu-amt-${item.id}`}
+                    >
+                      <input
+                        id={`menu-amt-${item.id}`}
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="any"
+                        className={fieldClassName}
+                        defaultValue={item.amount ?? ''}
+                        placeholder={
+                          care?.defaultAmount != null
+                            ? String(care.defaultAmount)
+                            : kind === 'food'
+                              ? '200'
+                              : '1'
+                        }
+                        onBlur={(e) => commitAmount(item, e.target.value, kind)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur()
+                        }}
+                        aria-label={`${amountLabel} for ${title}`}
+                      />
+                    </Field>
+                    <Field label="Unit" htmlFor={`menu-unit-${item.id}`}>
+                      <input
+                        id={`menu-unit-${item.id}`}
+                        className={fieldClassName}
+                        value={item.unit ?? ''}
+                        placeholder={kind === 'food' ? 'g' : care?.unit || ''}
+                        onChange={(e) =>
+                          updateItem(item.id, { unit: e.target.value })
+                        }
+                        onBlur={(e) => {
+                          const next =
+                            e.target.value.trim() ||
+                            (kind === 'food' ? 'g' : null)
+                          if (next !== item.unit) {
+                            updateItem(item.id, { unit: next })
+                          }
+                        }}
+                        aria-label={`Unit for ${title}`}
+                      />
+                    </Field>
+                  </div>
                 </li>
               )
             })}

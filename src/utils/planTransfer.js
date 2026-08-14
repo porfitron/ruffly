@@ -220,6 +220,7 @@ function dogToRow(dog, { includePhotos = true } = {}) {
     onboarding
       ? [onboarding.basicsDone ? 1 : 0, onboarding.menuDone ? 1 : 0]
       : null,
+    dog.away ? 1 : null,
   ]
 }
 
@@ -256,6 +257,7 @@ function dogFromRow(row) {
           },
         }
       : {}),
+    ...(row[20] === 1 ? { away: true } : {}),
   }
 }
 

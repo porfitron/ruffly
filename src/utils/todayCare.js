@@ -1,5 +1,7 @@
 /** Calendar day helpers + “what’s due today” from menus vs logs. */
 
+import { isDogAway } from './dogs'
+
 export function startOfLocalDay(date = new Date()) {
   const d = new Date(date)
   d.setHours(0, 0, 0, 0)
@@ -75,6 +77,113 @@ export function formatSlotLabel(slot) {
   return raw.charAt(0).toUpperCase() + raw.slice(1)
 }
 
+const MEAL_SLOTS = new Set([
+  'breakfast',
+  'morning',
+  'midday',
+  'lunch',
+  'afternoon',
+  'evening',
+  'dinner',
+  'night',
+])
+
+export function isMealSlot(slot) {
+  return MEAL_SLOTS.has(String(slot ?? '').toLowerCase())
+}
+
+const KIND_ORDER = { food: 0, med: 1, supplement: 2, weight: 3 }
+
+function sortMealItems(a, b) {
+  const kind = (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9)
+  if (kind !== 0) return kind
+  return String(a.name ?? '').localeCompare(String(b.name ?? ''), undefined, {
+    sensitivity: 'base',
+  })
+}
+
+/**
+ * Collapse meal-time slots into one checkable row with component items.
+ * Daily / as-needed stay as individual rows.
+ */
+export function groupTodayTasks(tasks) {
+  const buckets = new Map()
+  const standalone = []
+
+  for (const task of tasks ?? []) {
+    if (isMealSlot(task.slot)) {
+      const slot = String(task.slot).toLowerCase()
+      if (!buckets.has(slot)) buckets.set(slot, [])
+      buckets.get(slot).push(task)
+    } else {
+      standalone.push(task)
+    }
+  }
+
+  const meals = [...buckets.entries()].map(([slot, items]) => {
+    const sorted = [...items].sort(sortMealItems)
+    return {
+      type: 'meal',
+      id: `${sorted[0].dogId}:meal:${slot}`,
+      dogId: sorted[0].dogId,
+      slot,
+      slotLabel: formatSlotLabel(slot),
+      items: sorted,
+      done: sorted.every((item) => item.done),
+      partial: sorted.some((item) => item.done) && !sorted.every((item) => item.done),
+    }
+  })
+
+  const rows = [
+    ...meals,
+    ...standalone.map((task) => ({ type: 'item', id: task.id, task })),
+  ]
+
+  rows.sort((a, b) => {
+    const aDone = a.type === 'meal' ? a.done : a.task.done
+    const bDone = b.type === 'meal' ? b.done : b.task.done
+    if (aDone !== bDone) return aDone ? 1 : -1
+    const aSlot = a.type === 'meal' ? a.slot : a.task.slot
+    const bSlot = b.type === 'meal' ? b.slot : b.task.slot
+    return slotSortKey(aSlot) - slotSortKey(bSlot)
+  })
+
+  return rows
+}
+
+/**
+ * Pair each menu item with at most one of today's logs.
+ * Exact menuItemId wins; leftover logs (quick-log, stale ids) fill the
+ * earliest unmatched slot of the same care item so breakfast ≠ evening.
+ */
+function claimLogsForMenuItems(menuItems, catalog, todayLogs) {
+  const byId = catalogById(catalog)
+  const remaining = [...(todayLogs ?? [])]
+  const claimed = new Map()
+
+  for (const menuItem of menuItems ?? []) {
+    if (!menuItem?.id) continue
+    const idx = remaining.findIndex((log) => log.menuItemId === menuItem.id)
+    if (idx >= 0) claimed.set(menuItem.id, remaining.splice(idx, 1)[0])
+  }
+
+  const unmatched = [...(menuItems ?? [])]
+    .filter((item) => item?.id && !claimed.has(item.id))
+    .sort((a, b) => slotSortKey(a.slot) - slotSortKey(b.slot))
+
+  for (const menuItem of unmatched) {
+    const careItem = byId.get(menuItem.careItemId)
+    if (!careItem) continue
+    const idx = remaining.findIndex(
+      (log) =>
+        log.careItemId === menuItem.careItemId && log.kind === careItem.kind,
+    )
+    if (idx >= 0) claimed.set(menuItem.id, remaining.splice(idx, 1)[0])
+  }
+
+  return claimed
+}
+
 /**
  * Build today’s care rows for one dog.
  * Menu items are due once per local day (as_needed only if not yet logged today).
@@ -82,6 +191,7 @@ export function formatSlotLabel(slot) {
 export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date()) {
   const byId = catalogById(catalog)
   const todayLogs = logsForDogOnDay(logs, dog.id, day)
+  const claimed = claimLogsForMenuItems(menuItems, catalog, todayLogs)
 
   const tasks = []
   for (const menuItem of menuItems ?? []) {
@@ -89,11 +199,7 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
     if (!careItem) continue
 
     const slot = menuItem.slot ?? 'daily'
-    const doneLog = todayLogs.find(
-      (log) =>
-        log.menuItemId === menuItem.id ||
-        (log.careItemId === menuItem.careItemId && log.kind === careItem.kind),
-    )
+    const doneLog = menuItem.id ? claimed.get(menuItem.id) : undefined
 
     if (slot === 'as_needed' && doneLog) continue
 
@@ -114,6 +220,7 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
       unit: menuItem.unit ?? careItem.unit,
       done: Boolean(doneLog),
       doneAt: doneLog?.loggedAt ?? null,
+      doneLogId: doneLog?.id ?? null,
       targetDER: dog.targetDER ?? null,
     })
   }
@@ -129,14 +236,21 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
 export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new Date()) {
   const groups = []
   for (const dog of dogs ?? []) {
+    if (isDogAway(dog)) continue
     const menu = menusByDogId?.[dog.id] ?? []
     const tasks = buildDogTodayTasks(dog, menu, catalog, logs, day)
+    const rows = groupTodayTasks(tasks)
     const kcalLogged = foodKcalLoggedToday(logs, dog.id, day)
     groups.push({
       dog,
       tasks,
-      dueCount: tasks.filter((t) => !t.done).length,
-      doneCount: tasks.filter((t) => t.done).length,
+      rows,
+      dueCount: rows.filter((row) =>
+        row.type === 'meal' ? !row.done : !row.task.done,
+      ).length,
+      doneCount: rows.filter((row) =>
+        row.type === 'meal' ? row.done : row.task.done,
+      ).length,
       kcalLogged,
       targetDER: dog.targetDER ?? null,
       hasMenu: menu.length > 0,

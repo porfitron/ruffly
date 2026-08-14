@@ -23,6 +23,14 @@ body {
 }
 
 @media print {
+  html,
+  body,
+  #root {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
   body {
     background: white;
   }
@@ -31,12 +39,16 @@ body {
     margin: 0.6in;
   }
 
-  .dogsitter-sheet {
-    break-inside: avoid;
+  /* Do not use break-inside: avoid on the full sheet — a guide taller than
+     one page can be clipped or dropped, taking later dogs with it. */
+  .dogsitter-print-page {
+    break-after: page;
+    page-break-after: always;
   }
 
-  .dogsitter-print-page + .dogsitter-print-page {
-    break-before: page;
+  .dogsitter-print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
   }
 
   /* Toggled via documentElement[data-print-dogs] — see DogsitterSheet */

@@ -81,6 +81,7 @@ export function normalizeDogRecord(dog, { menuDoneHint } = {}) {
   return {
     ...dog,
     onboarding,
+    away: Boolean(dog.away),
     medicationNeedIds: normalizeMedicationNeedIds(dog.medicationNeedIds),
     behaviorNotes: dog.behaviorNotes ?? '',
     licenseNumber: dog.licenseNumber ?? '',
