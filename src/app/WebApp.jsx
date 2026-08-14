@@ -10,6 +10,7 @@ import QuickLogSheet, {
 } from '../components/log/QuickLogSheet'
 import CatalogTab from '../components/catalog/CatalogTab'
 import CareGuideTab from '../components/trip/CareGuideTab'
+import HomeScreenBadgePrompt from '../components/layout/HomeScreenBadgePrompt'
 import { useApp } from '../context/AppContext'
 
 const SUBTITLES = {
@@ -103,6 +104,7 @@ export default function WebApp() {
       </div>
 
       <main className="space-y-4 px-4 print:space-y-0 print:px-0">
+        {activeTab === 'today' ? <HomeScreenBadgePrompt /> : null}
         {activeTab === 'today' && (
           <TodayView
             onLog={() => setLogOpen(true)}

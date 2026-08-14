@@ -432,6 +432,8 @@ function reducer(state, action) {
         ...state,
         proTeaser: { ...state.proTeaser, userEmail: action.payload },
       }
+    case 'DISMISS_BADGE_PROMPT':
+      return { ...state, badgePromptDismissed: true }
     case 'SET_TRIP_SETTINGS':
       return {
         ...state,
@@ -563,10 +565,26 @@ export function AppProvider({ children }) {
 
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', sync)
+
+    let permissionStatus
+    function onPermissionChange() {
+      sync()
+    }
+    if (navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: 'notifications' })
+        .then((status) => {
+          permissionStatus = status
+          status.addEventListener('change', onPermissionChange)
+        })
+        .catch(() => {})
+    }
+
     return () => {
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', sync)
       window.clearTimeout(midnightTimer)
+      permissionStatus?.removeEventListener('change', onPermissionChange)
     }
   }, [state.dogs, state.menusByDogId, state.catalog, state.logs])
 

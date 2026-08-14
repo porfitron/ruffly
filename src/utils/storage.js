@@ -28,6 +28,7 @@ export const DEFAULT_APP_DATA = {
     hasClickedAddDog: false,
     userEmail: null,
   },
+  badgePromptDismissed: false,
 }
 
 export const EMPTY_CARE_INFO = {
@@ -465,6 +466,7 @@ export function normalizeAppData(raw) {
       ...base.proTeaser,
       ...(parsed.proTeaser ?? {}),
     },
+    badgePromptDismissed: Boolean(parsed.badgePromptDismissed),
   }
 }
 
