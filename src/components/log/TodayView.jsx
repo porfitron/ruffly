@@ -1,15 +1,18 @@
 import { useCallback, useState } from 'react'
-import { Check, Circle, Minus, PawPrint, Plus } from 'lucide-react'
+import { Check, Circle, GripVertical, Minus, PawPrint, Plus } from 'lucide-react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
 import MealCelebration from '../ui/MealCelebration'
 import DogAvatar from '../profile/DogAvatar'
 import { useApp } from '../../context/AppContext'
+import { useHoldReorder } from '../../hooks/useHoldReorder'
 import { isDogAway } from '../../utils/dogs'
 import {
   buildPackTodayTasks,
   estimateFoodKcal,
+  isTodayDailyRow,
   kindLabel,
+  todayRowKey,
 } from '../../utils/todayCare'
 
 const SLOT_CELEBRATIONS = {
@@ -98,14 +101,42 @@ function KcalBar({ logged, target }) {
   )
 }
 
-function TaskRow({ task, onDone, onUndo }) {
+function ReorderGrip({ name, dragging, handleProps }) {
+  return (
+    <button
+      type="button"
+      className={`flex h-11 w-8 shrink-0 items-center justify-center select-none [-webkit-touch-callout:none] hover:text-slate-400 ${
+        dragging
+          ? 'cursor-grabbing touch-none text-slate-400'
+          : 'cursor-grab touch-manipulation text-slate-300'
+      }`}
+      aria-label={`Hold and drag to reorder ${name}`}
+      aria-grabbed={dragging}
+      {...handleProps}
+    >
+      <GripVertical size={18} strokeWidth={2.5} aria-hidden />
+    </button>
+  )
+}
+
+function TaskRow({
+  task,
+  onDone,
+  onUndo,
+  rowRef,
+  dragging = false,
+  reorderHandle = null,
+}) {
   const amount = taskAmount(task)
   return (
     <li
+      ref={rowRef}
       className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 transition-colors ${
-        task.done
-          ? 'border-emerald-100 bg-emerald-50/60'
-          : 'border-amber-100 bg-[#FBF9F5]'
+        dragging
+          ? 'relative z-10 scale-[1.02] border-[#F59E0B]/40 bg-white shadow-lg'
+          : task.done
+            ? 'border-emerald-100 bg-emerald-50/60'
+            : 'border-amber-100 bg-[#FBF9F5]'
       }`}
     >
       <CheckButton
@@ -131,13 +162,15 @@ function TaskRow({ task, onDone, onUndo }) {
           {amount ? ` · ${amount}` : ''}
         </p>
       </div>
+      {reorderHandle}
     </li>
   )
 }
 
-function MealRow({ meal, onDone, onUndo, onItemDone, onItemUndo }) {
+function MealRow({ meal, onDone, onUndo, onItemDone, onItemUndo, rowRef }) {
   return (
     <li
+      ref={rowRef}
       className={`rounded-2xl border px-3 py-2.5 transition-colors ${
         meal.done
           ? 'border-emerald-100 bg-emerald-50/60'
@@ -220,6 +253,108 @@ function MealRow({ meal, onDone, onUndo, onItemDone, onItemUndo }) {
         })}
       </ul>
     </li>
+  )
+}
+
+function TodayTaskRow({
+  row,
+  onMealDone,
+  onMealUndo,
+  onItemDone,
+  onItemUndo,
+  rowRef,
+  dragging,
+  reorderHandle,
+}) {
+  if (row.type === 'meal') {
+    return (
+      <MealRow
+        meal={row}
+        onDone={onMealDone}
+        onUndo={onMealUndo}
+        onItemDone={onItemDone}
+        onItemUndo={onItemUndo}
+        rowRef={rowRef}
+      />
+    )
+  }
+  return (
+    <TaskRow
+      task={row.task}
+      onDone={onItemDone}
+      onUndo={onItemUndo}
+      rowRef={rowRef}
+      dragging={dragging}
+      reorderHandle={reorderHandle}
+    />
+  )
+}
+
+function DogTodayTaskList({
+  dog,
+  rows,
+  onMealDone,
+  onMealUndo,
+  onItemDone,
+  onItemUndo,
+}) {
+  const { dispatch } = useApp()
+  const movable = rows.filter((row) => todayRowKey(row) != null)
+  const pinned = rows.filter((row) => todayRowKey(row) == null)
+  const ids = movable.map((row) => row.id)
+  const canReorder =
+    movable.some(isTodayDailyRow) && movable.length > 1
+  const { currentIds, draggingId, setItemRef, bindHandle } = useHoldReorder({
+    ids,
+    enabled: canReorder,
+    onCommit: (orderedIds) => {
+      const byId = new Map(movable.map((row) => [row.id, row]))
+      const order = orderedIds
+        .map((id) => todayRowKey(byId.get(id)))
+        .filter(Boolean)
+      dispatch({
+        type: 'UPDATE_DOG_PROFILE',
+        payload: { id: dog.id, todayRowOrder: order },
+      })
+    },
+  })
+  const byId = new Map(movable.map((row) => [row.id, row]))
+  const ordered = currentIds.map((id) => byId.get(id)).filter(Boolean)
+
+  return (
+    <ul className={`space-y-2 ${draggingId ? 'select-none' : ''}`}>
+      {ordered.map((row) => (
+        <TodayTaskRow
+          key={row.id}
+          row={row}
+          onMealDone={onMealDone}
+          onMealUndo={onMealUndo}
+          onItemDone={onItemDone}
+          onItemUndo={onItemUndo}
+          rowRef={(node) => setItemRef(row.id, node)}
+          dragging={row.id === draggingId}
+          reorderHandle={
+            canReorder && isTodayDailyRow(row) ? (
+              <ReorderGrip
+                name={row.task.name}
+                dragging={row.id === draggingId}
+                handleProps={bindHandle(row.id)}
+              />
+            ) : null
+          }
+        />
+      ))}
+      {pinned.map((row) => (
+        <TodayTaskRow
+          key={row.id}
+          row={row}
+          onMealDone={onMealDone}
+          onMealUndo={onMealUndo}
+          onItemDone={onItemDone}
+          onItemUndo={onItemUndo}
+        />
+      ))}
+    </ul>
   )
 }
 
@@ -419,27 +554,14 @@ export default function TodayView({
               </div>
 
               {rows.length > 0 ? (
-                <ul className="space-y-2">
-                  {rows.map((row) =>
-                    row.type === 'meal' ? (
-                      <MealRow
-                        key={row.id}
-                        meal={row}
-                        onDone={handleMealDone}
-                        onUndo={handleMealUndo}
-                        onItemDone={handleDone}
-                        onItemUndo={handleUndo}
-                      />
-                    ) : (
-                      <TaskRow
-                        key={row.id}
-                        task={row.task}
-                        onDone={handleDone}
-                        onUndo={handleUndo}
-                      />
-                    ),
-                  )}
-                </ul>
+                <DogTodayTaskList
+                  dog={dog}
+                  rows={rows}
+                  onMealDone={handleMealDone}
+                  onMealUndo={handleMealUndo}
+                  onItemDone={handleDone}
+                  onItemUndo={handleUndo}
+                />
               ) : !hasMenu ? (
                 <p className="rounded-2xl bg-[#FBF9F5] px-3 py-3 text-sm text-slate-500">
                   Set a daily menu so care shows up here.{' '}

@@ -82,8 +82,13 @@ export function normalizeDogRecord(dog, { menuDoneHint } = {}) {
     onboarding.menuDone = true
   }
 
+  const todayRowOrder = Array.isArray(dog.todayRowOrder)
+    ? dog.todayRowOrder.filter((key) => typeof key === 'string' && key)
+    : []
+  const { todayRowOrder: _ignoredTodayRowOrder, ...rest } = dog
+
   return {
-    ...dog,
+    ...rest,
     onboarding,
     away: Boolean(dog.away),
     medicationNeedIds: normalizeMedicationNeedIds(dog.medicationNeedIds),
@@ -92,6 +97,7 @@ export function normalizeDogRecord(dog, { menuDoneHint } = {}) {
     vaccineInfo: dog.vaccineInfo ?? '',
     microchipId: dog.microchipId ?? '',
     careInfo: { ...EMPTY_CARE_INFO, ...(dog.careInfo ?? {}) },
+    ...(todayRowOrder.length ? { todayRowOrder } : {}),
   }
 }
 

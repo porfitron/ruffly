@@ -104,11 +104,52 @@ function sortMealItems(a, b) {
   })
 }
 
+/** Stable key for persisting Today row order (meals + planned items). */
+export function todayRowKey(row) {
+  if (!row) return null
+  if (row.type === 'meal') return `meal:${String(row.slot).toLowerCase()}`
+  const task = row.task
+  if (!task || task.oneTime || !task.menuItemId) return null
+  return `item:${task.menuItemId}`
+}
+
+export function isTodayDailyRow(row) {
+  if (row?.type !== 'item' || !row.task || row.task.oneTime) return false
+  return String(row.task.slot ?? 'daily').toLowerCase() === 'daily'
+}
+
+/** Apply a saved Today order; new rows stay in slot order after known ones. */
+export function applyTodayRowOrder(rows, todayRowOrder) {
+  const pinned = []
+  const movable = []
+  for (const row of rows ?? []) {
+    if (todayRowKey(row) == null) pinned.push(row)
+    else movable.push(row)
+  }
+
+  if (!Array.isArray(todayRowOrder) || todayRowOrder.length === 0) {
+    return [...movable, ...pinned]
+  }
+
+  const byKey = new Map()
+  for (const row of movable) byKey.set(todayRowKey(row), row)
+
+  const ordered = []
+  for (const key of todayRowOrder) {
+    const row = byKey.get(key)
+    if (!row) continue
+    ordered.push(row)
+    byKey.delete(key)
+  }
+
+  return [...ordered, ...byKey.values(), ...pinned]
+}
+
 /**
  * Collapse meal-time slots into one checkable row with component items.
  * Daily / as-needed stay as individual rows.
  */
-export function groupTodayTasks(tasks) {
+export function groupTodayTasks(tasks, todayRowOrder) {
   const buckets = new Map()
   const standalone = []
 
@@ -148,7 +189,7 @@ export function groupTodayTasks(tasks) {
     return slotSortKey(aSlot) - slotSortKey(bSlot)
   })
 
-  return rows
+  return applyTodayRowOrder(rows, todayRowOrder)
 }
 
 /**
@@ -282,7 +323,7 @@ export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new
     if (isDogAway(dog)) continue
     const menu = menusByDogId?.[dog.id] ?? []
     const tasks = buildDogTodayTasks(dog, menu, catalog, logs, day)
-    const rows = groupTodayTasks(tasks)
+    const rows = groupTodayTasks(tasks, dog.todayRowOrder)
     const kcalLogged = foodKcalLoggedToday(logs, dog.id, day)
     groups.push({
       dog,
