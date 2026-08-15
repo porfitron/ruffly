@@ -513,15 +513,11 @@ export function encodePlanForQr(state) {
 }
 
 function encodePlanSnapshot(state) {
-  const hasEmbeddedPhotos =
+  const omittedPhotos =
     (state.dogs ?? []).some((dog) => isDataUrl(dog.photoUrl)) ||
     isDataUrl(state.ownerAccount?.photoUrl)
-  let omittedPhotos = false
-  let compressed = compressPlan(state, { includePhotos: true })
-  if (compressed.byteLength > MAX_PLAN_COMPRESSED_BYTES && hasEmbeddedPhotos) {
-    compressed = compressPlan(state, { includePhotos: false })
-    omittedPhotos = true
-  }
+  // JPEG data URLs barely compress and dominate QR frame count — leave them off.
+  const compressed = compressPlan(state, { includePhotos: false })
   if (compressed.byteLength > MAX_PLAN_COMPRESSED_BYTES) {
     throw new Error(
       'This plan is too large to share. Try removing old care logs.',

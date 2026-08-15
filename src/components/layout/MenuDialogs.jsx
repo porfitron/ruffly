@@ -153,7 +153,8 @@ function SharePlanDialog({ open, onClose }) {
           ) : null}
           {omittedPhotos ? (
             <p className="mt-3 text-sm text-slate-500">
-              Dog photos were skipped so this transfer would fit.
+              Dog photos are left off so the codes stay small. Add them again on
+              the other phone.
             </p>
           ) : null}
         </>
