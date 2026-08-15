@@ -7,9 +7,10 @@ import DogAvatar from '../profile/DogAvatar'
  * Dog management lives on Pack; account in the header menu.
  */
 export default function Navigation({ activeTab, onChange, onLog }) {
-  const { activeDog, dogs } = useApp()
-  const hasActivePup = Boolean(activeDog?.name?.trim())
-  const dogLabel = hasActivePup ? activeDog.name.trim() : 'Pack'
+  const { dogs } = useApp()
+  const packLead = dogs[0]
+  const hasPackPup = Boolean(packLead?.name?.trim())
+  const dogLabel = hasPackPup ? packLead.name.trim() : 'Pack'
 
   return (
     <nav className="print:hidden fixed inset-x-0 bottom-0 border-t border-amber-100 bg-white/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
@@ -47,10 +48,10 @@ export default function Navigation({ activeTab, onChange, onLog }) {
           }`}
           aria-label={dogs.length > 1 ? `Pack — ${dogLabel}` : 'Pack'}
         >
-          {hasActivePup && dogs.length > 0 ? (
+          {hasPackPup ? (
             <DogAvatar
               name={dogLabel}
-              photoUrl={activeDog?.photoUrl}
+              photoUrl={packLead?.photoUrl}
               size="nav"
               ring={activeTab === 'pack'}
             />
