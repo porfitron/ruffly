@@ -69,6 +69,11 @@ body {
   }
 }
 
+/* Hide Today chrome before screenshot so remaining rows reflow at full width. */
+[data-sharing] .share-hide {
+  display: none !important;
+}
+
 #ruffly-qr-reader {
   width: 100%;
 }

@@ -1,12 +1,26 @@
-import { useCallback, useState } from 'react'
-import { Check, Circle, GripVertical, Minus, PawPrint, Plus } from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
+import {
+  Check,
+  Circle,
+  GripVertical,
+  Minus,
+  PawPrint,
+  Plus,
+  Share,
+} from 'lucide-react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
+import BrandMark from '../ui/BrandMark'
 import MealCelebration from '../ui/MealCelebration'
 import DogAvatar from '../profile/DogAvatar'
 import { useApp } from '../../context/AppContext'
 import { useHoldReorder } from '../../hooks/useHoldReorder'
 import { isDogAway } from '../../utils/dogs'
+import {
+  formatPackUpdateDate,
+  shareTodayScreenshots,
+} from '../../utils/shareToday'
 import {
   buildPackTodayTasks,
   estimateFoodKcal,
@@ -105,7 +119,7 @@ function ReorderGrip({ name, dragging, handleProps }) {
   return (
     <button
       type="button"
-      className={`flex h-11 w-8 shrink-0 items-center justify-center select-none [-webkit-touch-callout:none] hover:text-slate-400 ${
+      className={`share-hide flex h-11 w-8 shrink-0 items-center justify-center select-none [-webkit-touch-callout:none] hover:text-slate-400 ${
         dragging
           ? 'cursor-grabbing touch-none text-slate-400'
           : 'cursor-grab touch-manipulation text-slate-300'
@@ -243,7 +257,7 @@ function MealRow({ meal, onDone, onUndo, onItemDone, onItemUndo, rowRef }) {
                   ) : null}
                 </span>
                 {amount ? (
-                  <span className="shrink-0 tabular-nums text-xs text-slate-400">
+                  <span className="shrink-0 whitespace-nowrap tabular-nums text-xs text-slate-400">
                     {amount}
                   </span>
                 ) : null}
@@ -366,7 +380,10 @@ export default function TodayView({
   onEditMenu,
 }) {
   const { dogs, catalog, menusByDogId, logs, dispatch } = useApp()
+  const dogCardRefs = useRef(new Map())
   const [celebration, setCelebration] = useState(null)
+  const [sharing, setSharing] = useState(false)
+  const [shareError, setShareError] = useState('')
   const groups = buildPackTodayTasks(dogs, menusByDogId, catalog, logs)
   const homeDogs = dogs.filter((dog) => !isDogAway(dog))
   const totalDue = groups.reduce((sum, g) => sum + g.dueCount, 0)
@@ -376,6 +393,37 @@ export default function TodayView({
     setCelebration({ theme, playId: Date.now() })
   }, [])
   const dismissCelebration = useCallback(() => setCelebration(null), [])
+
+  function setDogCardRef(id, node) {
+    if (node) dogCardRefs.current.set(id, node)
+    else dogCardRefs.current.delete(id)
+  }
+
+  async function handleShareUpdates() {
+    if (sharing) return
+    setShareError('')
+    flushSync(() => setSharing(true))
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve))
+    })
+    try {
+      const items = groups
+        .map(({ dog }) => ({
+          node: dogCardRefs.current.get(dog.id),
+          name: dog.name,
+        }))
+        .filter((item) => item.node)
+      await shareTodayScreenshots(items, { totalDue })
+    } catch (err) {
+      if (err?.name !== 'AbortError') {
+        setShareError(
+          err?.message || 'Couldn’t share the update. Try again.',
+        )
+      }
+    } finally {
+      setSharing(false)
+    }
+  }
 
   function logTask(task) {
     const careItem = (catalog ?? []).find((c) => c.id === task.careItemId)
@@ -487,25 +535,47 @@ export default function TodayView({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-end justify-between gap-3 px-0.5">
-        <div>
-          <h2 className="text-lg font-bold text-slate-800">Today</h2>
-          <p className="text-sm text-slate-500">
-            {totalDue === 0
-              ? 'You’re all caught up'
-              : `${totalDue} care item${totalDue === 1 ? '' : 's'} left`}
+    <>
+      {sharing ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-[#FBF9F5]/80 print:hidden"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="text-sm font-semibold text-[#F59E0B]">
+            Preparing update…
           </p>
         </div>
-        <Button
-          variant="ghost"
-          className="!h-10 shrink-0 px-3 text-[#F59E0B]"
-          onClick={onLog}
-        >
-          <Plus size={18} />
-          Log
-        </Button>
-      </div>
+      ) : null}
+
+      <div
+        data-sharing={sharing ? 'true' : undefined}
+        className="space-y-4"
+      >
+        <div className="flex items-end justify-between gap-3 px-0.5">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-bold text-slate-800">Today</h2>
+            <p className="text-sm leading-5 text-slate-500">
+              {totalDue === 0
+                ? 'You’re all caught up'
+                : `${totalDue} care item${totalDue === 1 ? '' : 's'} left`}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            className="share-hide !h-10 shrink-0 whitespace-nowrap px-3 text-[#F59E0B]"
+            onClick={handleShareUpdates}
+            disabled={sharing}
+            aria-busy={sharing}
+          >
+            Share Updates
+            <Share size={18} />
+          </Button>
+        </div>
+
+      {shareError ? (
+        <p className="share-hide px-0.5 text-sm text-red-600">{shareError}</p>
+      ) : null}
 
       {totalDue === 0 ? (
         <Card className="border border-emerald-100 bg-emerald-50/50 text-center">
@@ -521,7 +591,24 @@ export default function TodayView({
 
       <ul className="space-y-4">
         {groups.map(({ dog, rows, dueCount, kcalLogged, targetDER, hasMenu }) => (
-          <li key={dog.id}>
+          <li
+            key={dog.id}
+            ref={(node) => setDogCardRef(dog.id, node)}
+            className={sharing ? 'space-y-4 bg-[#FBF9F5] px-5 py-6' : undefined}
+          >
+            {sharing ? (
+              <div className="flex items-center gap-3">
+                <BrandMark className="h-10 w-10" />
+                <div className="min-w-0">
+                  <p className="whitespace-nowrap text-sm font-extrabold leading-5 text-[#F59E0B]">
+                    Ruffly
+                  </p>
+                  <p className="whitespace-nowrap text-xs leading-5 text-slate-500">
+                    {dog.name} · {formatPackUpdateDate()}
+                  </p>
+                </div>
+              </div>
+            ) : null}
             <Card className="!p-4">
               <div className="mb-3 flex items-center gap-3">
                 <DogAvatar
@@ -536,7 +623,7 @@ export default function TodayView({
                     </h3>
                     <button
                       type="button"
-                      className="shrink-0 text-xs font-semibold text-[#F59E0B]"
+                      className="share-hide shrink-0 text-xs font-semibold text-[#F59E0B]"
                       onClick={() => onEditMenu?.(dog.id)}
                     >
                       {hasMenu ? 'Edit routine' : 'Add menu'}
@@ -567,7 +654,7 @@ export default function TodayView({
                   Set a daily menu so care shows up here.{' '}
                   <button
                     type="button"
-                    className="font-semibold text-[#F59E0B]"
+                    className="share-hide font-semibold text-[#F59E0B]"
                     onClick={() => onEditMenu?.(dog.id)}
                   >
                     Set up
@@ -575,6 +662,11 @@ export default function TodayView({
                 </p>
               ) : null}
             </Card>
+            {sharing ? (
+              <p className="pt-1 text-center text-xs leading-5 text-slate-400">
+                Shared from Ruffly.app
+              </p>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -582,16 +674,17 @@ export default function TodayView({
       <button
         type="button"
         onClick={onOpenPack}
-        className="w-full py-2 text-center text-sm font-semibold text-slate-400 hover:text-slate-600"
+        className="share-hide w-full py-2 text-center text-sm font-semibold text-slate-400 hover:text-slate-600"
       >
         Manage pack →
       </button>
+      </div>
 
       <MealCelebration
         playId={celebration?.playId ?? null}
         theme={celebration?.theme ?? 'sun'}
         onDone={dismissCelebration}
       />
-    </div>
+    </>
   )
 }
