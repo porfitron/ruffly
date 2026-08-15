@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import Header from '../components/layout/Header'
 import Navigation from '../components/layout/Navigation'
 import MenuDialogs from '../components/layout/MenuDialogs'
@@ -11,6 +11,7 @@ import QuickLogSheet, {
 import CatalogTab from '../components/catalog/CatalogTab'
 import CareGuideTab from '../components/trip/CareGuideTab'
 import HomeScreenBadgePrompt from '../components/layout/HomeScreenBadgePrompt'
+import MealCelebration from '../components/ui/MealCelebration'
 import { useApp } from '../context/AppContext'
 
 const SUBTITLES = {
@@ -36,8 +37,11 @@ export default function WebApp() {
   const [showAccount, setShowAccount] = useState(false)
   const [logOpen, setLogOpen] = useState(false)
   const [menuDogId, setMenuDogId] = useState(null)
+  const [newDogMenu, setNewDogMenu] = useState(false)
+  const [tonguePlayId, setTonguePlayId] = useState(null)
 
   const accountIncomplete = isOwnerAccountIncomplete(ownerAccount)
+  const dismissTongues = useCallback(() => setTonguePlayId(null), [])
 
   function handleTabChange(id) {
     if (id === activeTab) {
@@ -122,7 +126,10 @@ export default function WebApp() {
             onAdded={(dogId) => {
               setAddingNewDog(false)
               // Menu is the onboarding goal.
-              if (dogId) openMenuEditor(dogId)
+              if (dogId) {
+                setNewDogMenu(true)
+                openMenuEditor(dogId)
+              }
             }}
             onEditMenu={openMenuEditor}
           />
@@ -159,7 +166,20 @@ export default function WebApp() {
         open={Boolean(menuDogId)}
         dogId={menuDogId === 'pick' ? null : menuDogId}
         onDogChange={(id) => setMenuDogId(id)}
-        onClose={() => setMenuDogId(null)}
+        onDone={() => {
+          if (newDogMenu) setTonguePlayId(Date.now())
+          setNewDogMenu(false)
+        }}
+        onClose={() => {
+          setMenuDogId(null)
+          setNewDogMenu(false)
+        }}
+      />
+
+      <MealCelebration
+        playId={tonguePlayId}
+        theme="tongue"
+        onDone={dismissTongues}
       />
 
       <MenuDialogs dialog={menuDialog} onClose={() => setMenuDialog(null)} />

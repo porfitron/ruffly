@@ -404,7 +404,7 @@ export default function QuickLogSheet({
 }
 
 /** Lightweight menu editor for a dog’s daily routine. */
-export function MenuEditorSheet({ open, dogId, onClose, onDogChange }) {
+export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
   const { dogs, catalog, menusByDogId, dispatch, createId, activeDogId } =
     useApp()
   const [selectedDogId, setSelectedDogId] = useState(
@@ -905,7 +905,13 @@ export function MenuEditorSheet({ open, dogId, onClose, onDogChange }) {
         )}
       </div>
 
-      <Button className="mt-4 w-full" onClick={onClose}>
+      <Button
+        className="mt-4 w-full"
+        onClick={() => {
+          onDone?.()
+          onClose()
+        }}
+      >
         Done
       </Button>
     </Modal>

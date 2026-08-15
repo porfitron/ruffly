@@ -1,6 +1,8 @@
+import { useCallback, useState } from 'react'
 import { Check, Circle, Minus, PawPrint, Plus } from 'lucide-react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
+import MealCelebration from '../ui/MealCelebration'
 import DogAvatar from '../profile/DogAvatar'
 import { useApp } from '../../context/AppContext'
 import { isDogAway } from '../../utils/dogs'
@@ -9,6 +11,34 @@ import {
   estimateFoodKcal,
   kindLabel,
 } from '../../utils/todayCare'
+
+const SLOT_CELEBRATIONS = {
+  breakfast: 'sun',
+  evening: 'moon',
+}
+
+function celebrationThemeForSlot(slot) {
+  return SLOT_CELEBRATIONS[String(slot ?? '').toLowerCase()] ?? null
+}
+
+/** Theme to play when logging this item finishes its meal. */
+function celebrationWhenCompleting(groups, task) {
+  const theme = celebrationThemeForSlot(task.slot)
+  if (!theme || task.done) return null
+  for (const group of groups) {
+    for (const row of group.rows) {
+      if (row.type !== 'meal' || celebrationThemeForSlot(row.slot) !== theme) {
+        continue
+      }
+      if (!row.items.some((item) => item.id === task.id)) continue
+      const completes = row.items.every(
+        (item) => item.id === task.id || item.done,
+      )
+      return completes ? theme : null
+    }
+  }
+  return null
+}
 
 function taskTitle(task) {
   if (task.kind === 'food' && (task.brand || task.flavor)) {
@@ -197,10 +227,16 @@ export default function TodayView({
   onEditMenu,
 }) {
   const { dogs, catalog, menusByDogId, logs, dispatch } = useApp()
+  const [celebration, setCelebration] = useState(null)
   const groups = buildPackTodayTasks(dogs, menusByDogId, catalog, logs)
   const homeDogs = dogs.filter((dog) => !isDogAway(dog))
   const totalDue = groups.reduce((sum, g) => sum + g.dueCount, 0)
   const totalTasks = groups.reduce((sum, g) => sum + g.tasks.length, 0)
+  const playCelebration = useCallback((theme) => {
+    if (!theme) return
+    setCelebration({ theme, playId: Date.now() })
+  }, [])
+  const dismissCelebration = useCallback(() => setCelebration(null), [])
 
   function logTask(task) {
     const careItem = (catalog ?? []).find((c) => c.id === task.careItemId)
@@ -223,7 +259,9 @@ export default function TodayView({
   }
 
   function handleDone(task) {
+    const theme = celebrationWhenCompleting(groups, task)
     logTask(task)
+    playCelebration(theme)
   }
 
   function handleUndo(task) {
@@ -233,9 +271,11 @@ export default function TodayView({
   }
 
   function handleMealDone(meal) {
+    const theme = meal.done ? null : celebrationThemeForSlot(meal.slot)
     for (const item of meal.items) {
       if (!item.done) logTask(item)
     }
+    playCelebration(theme)
   }
 
   function handleMealUndo(meal) {
@@ -420,6 +460,12 @@ export default function TodayView({
       >
         Manage pack →
       </button>
+
+      <MealCelebration
+        playId={celebration?.playId ?? null}
+        theme={celebration?.theme ?? 'sun'}
+        onDone={dismissCelebration}
+      />
     </div>
   )
 }

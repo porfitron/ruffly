@@ -85,3 +85,98 @@ body {
 #ruffly-qr-reader__dashboard_section {
   display: none !important;
 }
+
+@keyframes ruffly-celebrate-wash {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  68% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes ruffly-celebrate-fall {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(0.35);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--celebrate-drift), 120vh, 0)
+      rotate(var(--celebrate-spin)) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes ruffly-celebrate-pop {
+  0% {
+    transform: translate(-50%, -50%) scale(0.15);
+    opacity: 0;
+  }
+  16% {
+    transform: translate(-50%, -50%) scale(1.12);
+    opacity: 1;
+  }
+  58% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.82);
+    opacity: 0;
+  }
+}
+
+@keyframes ruffly-celebrate-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  30%,
+  70% {
+    opacity: 1;
+  }
+}
+
+.ruffly-celebrate-wash {
+  animation: ruffly-celebrate-wash 2.8s ease-in-out both;
+}
+
+.ruffly-celebrate-fall {
+  animation-name: ruffly-celebrate-fall;
+  animation-timing-function: cubic-bezier(0.22, 0.72, 0.36, 1);
+  animation-fill-mode: both;
+}
+
+.ruffly-celebrate-pop {
+  font-size: 6.5rem;
+  line-height: 1;
+  animation: ruffly-celebrate-pop 2.4s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ruffly-celebrate-wash,
+  .ruffly-celebrate-fall,
+  .ruffly-celebrate-pop {
+    animation: ruffly-celebrate-fade 1.6s ease-in-out both;
+  }
+
+  .ruffly-celebrate-fall {
+    transform: none;
+  }
+
+  .ruffly-celebrate-pop {
+    transform: translate(-50%, -50%);
+  }
+}

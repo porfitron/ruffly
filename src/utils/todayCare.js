@@ -140,9 +140,6 @@ export function groupTodayTasks(tasks) {
   ]
 
   rows.sort((a, b) => {
-    const aDone = a.type === 'meal' ? a.done : a.task.done
-    const bDone = b.type === 'meal' ? b.done : b.task.done
-    if (aDone !== bDone) return aDone ? 1 : -1
     const aSlot = a.type === 'meal' ? a.slot : a.task.slot
     const bSlot = b.type === 'meal' ? b.slot : b.task.slot
     return slotSortKey(aSlot) - slotSortKey(bSlot)
@@ -186,7 +183,7 @@ function claimLogsForMenuItems(menuItems, catalog, todayLogs) {
 
 /**
  * Build today’s care rows for one dog.
- * Menu items are due once per local day (as_needed only if not yet logged today).
+ * Menu items are due once per local day; completed rows stay visible.
  */
 export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date()) {
   const byId = catalogById(catalog)
@@ -200,8 +197,6 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
 
     const slot = menuItem.slot ?? 'daily'
     const doneLog = menuItem.id ? claimed.get(menuItem.id) : undefined
-
-    if (slot === 'as_needed' && doneLog) continue
 
     tasks.push({
       id: `${dog.id}:${menuItem.id}`,
@@ -225,10 +220,7 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
     })
   }
 
-  tasks.sort((a, b) => {
-    if (a.done !== b.done) return a.done ? 1 : -1
-    return slotSortKey(a.slot) - slotSortKey(b.slot)
-  })
+  tasks.sort((a, b) => slotSortKey(a.slot) - slotSortKey(b.slot))
 
   return tasks
 }
@@ -256,13 +248,11 @@ export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new
       hasMenu: menu.length > 0,
     })
   }
-  // Dogs with due work first, then by name
-  groups.sort((a, b) => {
-    if (a.dueCount !== b.dueCount) return b.dueCount - a.dueCount
-    return (a.dog.name || '').localeCompare(b.dog.name || '', undefined, {
+  groups.sort((a, b) =>
+    (a.dog.name || '').localeCompare(b.dog.name || '', undefined, {
       sensitivity: 'base',
-    })
-  })
+    }),
+  )
   return groups
 }
 
