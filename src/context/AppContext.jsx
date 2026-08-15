@@ -464,6 +464,7 @@ function reducer(state, action) {
     case 'SET_OWNER_ACCOUNT': {
       const ownerAccount = {
         ...EMPTY_OWNER_ACCOUNT,
+        ...(state.ownerAccount ?? {}),
         ...action.payload,
       }
       const dogs = state.dogs.map((dog) => ({

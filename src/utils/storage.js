@@ -6,6 +6,7 @@ export const EMPTY_OWNER_ACCOUNT = {
   name: '',
   phone: '',
   email: '',
+  photoUrl: '',
 }
 
 export const CARE_ITEM_KINDS = ['food', 'med', 'supplement']

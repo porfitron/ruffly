@@ -1,12 +1,25 @@
-/** Circular or rounded pet avatar — photo when set, else name initial. */
+export function initialsFromName(name) {
+  const parts = String(name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (parts.length === 0) return ''
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+/** Circular avatar — photo when set, else initials (one letter unless `initials` is passed). */
 export default function DogAvatar({
   name = '',
   photoUrl = '',
+  initials = '',
   size = 'md',
   className = '',
   ring = false,
 }) {
-  const initial = name.trim() ? name.trim().charAt(0).toUpperCase() : '?'
+  const initial =
+    initials.trim() ||
+    (name.trim() ? name.trim().charAt(0).toUpperCase() : '?')
   const sizeClass =
     size === 'nav'
       ? 'h-[22px] w-[22px] text-[10px]'

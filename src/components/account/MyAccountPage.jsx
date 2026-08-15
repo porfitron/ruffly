@@ -5,6 +5,8 @@ import Button from '../ui/Button'
 import { Field, fieldClassName } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
 import { EMPTY_OWNER_ACCOUNT } from '../../utils/storage'
+import DogPhotoPicker from '../profile/DogPhotoPicker'
+import { initialsFromName } from '../profile/DogAvatar'
 
 /** Owner contact details that seed Care contacts on the Trip tab */
 export default function MyAccountPage({ onBack }) {
@@ -14,9 +16,11 @@ export default function MyAccountPage({ onBack }) {
     ...(ownerAccount ?? {}),
   })
   const [savedFlash, setSavedFlash] = useState(false)
+  const [photoError, setPhotoError] = useState('')
 
   useEffect(() => {
     setForm({ ...EMPTY_OWNER_ACCOUNT, ...(ownerAccount ?? {}) })
+    setPhotoError('')
   }, [ownerAccount])
 
   function update(field, value) {
@@ -31,11 +35,14 @@ export default function MyAccountPage({ onBack }) {
         name: form.name.trim(),
         phone: form.phone.trim(),
         email: form.email.trim(),
+        photoUrl: form.photoUrl ?? '',
       },
     })
     setSavedFlash(true)
     window.setTimeout(() => setSavedFlash(false), 1600)
   }
+
+  const accountInitials = initialsFromName(form.name) || 'ME'
 
   return (
     <div className="mx-auto min-h-dvh max-w-lg bg-[#FBF9F5] pb-8">
@@ -60,10 +67,41 @@ export default function MyAccountPage({ onBack }) {
 
       <main className="space-y-4 px-4">
         <Card>
-          <p className="text-sm text-slate-500">
-            Saved here and filled into Care contacts for every pup on the Trip
-            planner.
-          </p>
+          <div className="flex items-start gap-3">
+            <DogPhotoPicker
+              name={form.name}
+              photoUrl={form.photoUrl}
+              initials={accountInitials}
+              onChange={(photoUrl) => {
+                update('photoUrl', photoUrl)
+                setPhotoError('')
+              }}
+              onError={setPhotoError}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-slate-500">
+                Saved here and filled into Care contacts for every pup on the
+                Trip planner.
+              </p>
+              {form.photoUrl ? (
+                <button
+                  type="button"
+                  className="mt-1 text-xs font-semibold text-slate-400 hover:text-slate-600"
+                  onClick={() => {
+                    update('photoUrl', '')
+                    setPhotoError('')
+                  }}
+                >
+                  Remove photo
+                </button>
+              ) : null}
+              {photoError ? (
+                <p className="mt-1 text-xs text-red-500" role="alert">
+                  {photoError}
+                </p>
+              ) : null}
+            </div>
+          </div>
 
           <form className="mt-4 space-y-3" onSubmit={handleSave}>
             <Field label="Name" htmlFor="account-name">

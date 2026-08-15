@@ -4,7 +4,13 @@ import DogAvatar from './DogAvatar'
 import { fileToDogPhotoDataUrl } from '../../utils/dogPhoto'
 
 /** Tappable profile avatar — pick a photo, preview in place. Commits via parent Save. */
-export default function DogPhotoPicker({ name = '', photoUrl = '', onChange, onError }) {
+export default function DogPhotoPicker({
+  name = '',
+  photoUrl = '',
+  initials = '',
+  onChange,
+  onError,
+}) {
   const inputRef = useRef(null)
   const [busy, setBusy] = useState(false)
 
@@ -43,7 +49,7 @@ export default function DogPhotoPicker({ name = '', photoUrl = '', onChange, onE
         aria-busy={busy}
         className="relative rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#F59E0B] focus-visible:outline-offset-2 disabled:opacity-60"
       >
-        <DogAvatar name={name} photoUrl={photoUrl} size="md" />
+        <DogAvatar name={name} photoUrl={photoUrl} initials={initials} size="md" />
         <span
           className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-[#F59E0B] text-white shadow-sm"
           aria-hidden

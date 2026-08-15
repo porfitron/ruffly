@@ -328,14 +328,16 @@ function logsFromCompact(compact) {
   }))
 }
 
-function ownerToCompact(state) {
+function ownerToCompact(state, { includePhotos = true } = {}) {
   const account = state.ownerAccount
   if (!account || typeof account !== 'object') return null
   const name = compactText(account.name)
   const phone = compactText(account.phone)
   const email = compactText(account.email)
-  if (!name && !phone && !email) return null
-  return [name, phone, email]
+  const photoUrl = compactText(account.photoUrl)
+  const includePhoto = includePhotos || !isDataUrl(photoUrl)
+  if (!name && !phone && !email && !(includePhoto && photoUrl)) return null
+  return [name, phone, email, includePhoto ? photoUrl : null]
 }
 
 function ownerFromCompact(compact) {
@@ -344,6 +346,7 @@ function ownerFromCompact(compact) {
     name: compact.o[0] ?? '',
     phone: compact.o[1] ?? '',
     email: compact.o[2] ?? '',
+    ...(compact.o[3] ? { photoUrl: compact.o[3] } : {}),
   }
 }
 
@@ -367,7 +370,7 @@ function toCompact(state, { includePhotos = true } = {}) {
   const catalog = catalogForTransfer(state)
   const pantry = pantryFromCatalog(catalog)
   const foods = pantry.length > 0 ? pantry : pantryForTransfer(state)
-  const owner = ownerToCompact(state)
+  const owner = ownerToCompact(state, { includePhotos })
   const teaser = teaserToCompact(state)
   const menus = menusToCompact(state)
   const logs = logsToCompact(state)
@@ -510,9 +513,9 @@ export function encodePlanForQr(state) {
 }
 
 function encodePlanSnapshot(state) {
-  const hasEmbeddedPhotos = (state.dogs ?? []).some((dog) =>
-    isDataUrl(dog.photoUrl),
-  )
+  const hasEmbeddedPhotos =
+    (state.dogs ?? []).some((dog) => isDataUrl(dog.photoUrl)) ||
+    isDataUrl(state.ownerAccount?.photoUrl)
   let omittedPhotos = false
   let compressed = compressPlan(state, { includePhotos: true })
   if (compressed.byteLength > MAX_PLAN_COMPRESSED_BYTES && hasEmbeddedPhotos) {
