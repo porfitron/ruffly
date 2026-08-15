@@ -10,8 +10,8 @@ import {
 } from '../../utils/calculations'
 import {
   formatSlotLabel,
+  groupTodayTasks,
   kindLabel,
-  slotSortKey,
 } from '../../utils/todayCare'
 
 function formatMealParts(servings, meal) {
@@ -88,20 +88,51 @@ function menuRowsForDog(catalog, menu) {
     .filter(Boolean)
 }
 
-function groupMenuBySlot(rows) {
-  const groups = new Map()
-  for (const row of rows) {
-    const slot = row.slot ?? 'daily'
-    if (!groups.has(slot)) groups.set(slot, [])
-    groups.get(slot).push(row)
-  }
-  return [...groups.entries()]
-    .sort(([a], [b]) => slotSortKey(a) - slotSortKey(b))
-    .map(([slot, items]) => ({
+/** Slot sections in Today order, so Daily can sit around Breakfast / Evening. */
+function groupMenuBySlot(rows, todayRowOrder) {
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  const tasks = rows.map((row) => ({
+    id: row.id,
+    dogId: 'guide',
+    menuItemId: row.id,
+    slot: row.slot,
+    kind: row.kind,
+    name: row.name,
+    oneTime: false,
+  }))
+
+  const groups = []
+  for (const row of groupTodayTasks(tasks, todayRowOrder)) {
+    if (row.type === 'meal') {
+      groups.push({
+        id: row.id,
+        slot: row.slot,
+        label: row.slotLabel,
+        items: row.items
+          .map((task) => byId.get(task.menuItemId))
+          .filter(Boolean),
+      })
+      continue
+    }
+
+    const item = byId.get(row.task.menuItemId)
+    if (!item) continue
+    const slot = item.slot ?? 'daily'
+    const prev = groups[groups.length - 1]
+    if (prev && prev.slot === slot && prev.kind === 'item') {
+      prev.items.push(item)
+      continue
+    }
+    groups.push({
+      id: row.id,
+      kind: 'item',
       slot,
       label: formatSlotLabel(slot),
-      items,
-    }))
+      items: [item],
+    })
+  }
+
+  return groups.filter((group) => group.items.length > 0)
 }
 
 function formatMenuAmount(amount, unit) {
@@ -167,7 +198,7 @@ function CareSheetDocument({
 }) {
   const care = dog.careInfo ?? {}
   const menuRows = menuRowsForDog(catalog, menu)
-  const menuGroups = groupMenuBySlot(menuRows)
+  const menuGroups = groupMenuBySlot(menuRows, dog.todayRowOrder)
   const feedingPlan = resolveActiveFeedingPlan(dog, pantry, mealPlan)
   const mealFoods = feedingPlan.filter((item) => !isTreat(item))
   const treatFoods = feedingPlan.filter(isTreat)
@@ -233,7 +264,7 @@ function CareSheetDocument({
           <div className="mt-3 space-y-3">
             {menuGroups.map((group) => (
               <div
-                key={group.slot}
+                key={group.id}
                 className="rounded-2xl border border-amber-100 p-3"
               >
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
