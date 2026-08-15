@@ -123,8 +123,7 @@ export default function DogSummaryCard({
             : 'transition-shadow hover:shadow-md'
       }`}
     >
-      <div className={`flex items-center ${reorderHandle ? 'gap-2' : 'gap-3'}`}>
-        {reorderHandle}
+      <div className="flex items-center gap-3">
         {onSelect ? (
           <button
             type="button"
@@ -172,6 +171,8 @@ export default function DogSummaryCard({
             Edit
           </button>
         ) : null}
+
+        {reorderHandle}
       </div>
     </div>
   )
