@@ -26,13 +26,9 @@ function localIsoDate(day = new Date()) {
   return `${y}-${m}-${d}`
 }
 
-function captureOptions(node) {
-  const width = Math.ceil(node.scrollWidth || node.offsetWidth)
-  const height = Math.ceil(node.scrollHeight || node.offsetHeight)
+function captureOptions() {
   return {
     backgroundColor: CREAM,
-    width,
-    height,
     scale: Math.min(2, window.devicePixelRatio || 2),
     maximumCanvasSize: IOS_MAX_CANVAS,
     timeout: 8000,
@@ -40,14 +36,19 @@ function captureOptions(node) {
       backgroundColor: CREAM,
       overflow: 'visible',
       boxSizing: 'border-box',
+      boxShadow: 'none',
     },
     filter: (el) =>
       !(el instanceof Element && el.classList.contains('share-hide')),
+    onCloneEachNode: (cloned) => {
+      if (!(cloned instanceof HTMLElement)) return
+      cloned.style.setProperty('box-shadow', 'none', 'important')
+    },
   }
 }
 
 async function captureNodePngDataUrl(node) {
-  const options = captureOptions(node)
+  const options = captureOptions()
   // Safari often paints a blank first frame.
   await domToPng(node, options)
   const dataUrl = await domToPng(node, options)

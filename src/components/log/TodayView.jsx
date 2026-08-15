@@ -99,13 +99,15 @@ function KcalBar({ logged, target }) {
   const pct = Math.min(100, Math.round((logged / target) * 100))
   return (
     <div className="mt-2">
-      <div className="flex items-baseline justify-between gap-2 text-xs">
-        <span className="font-medium text-slate-500">
-          {Math.round(logged)} / {Math.round(target)} kcal today
+      <div className="flex items-center justify-between gap-2 text-xs leading-5">
+        <span className="whitespace-nowrap font-medium text-slate-500">
+          {Math.round(logged)} / {Math.round(target)} kcal
         </span>
-        <span className="tabular-nums text-slate-400">{pct}%</span>
+        <span className="shrink-0 whitespace-nowrap tabular-nums text-slate-400">
+          {pct}%
+        </span>
       </div>
-      <div className="mt-1 h-2 overflow-hidden rounded-full bg-amber-100">
+      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-amber-100">
         <div
           className="h-full rounded-full bg-[#F59E0B] transition-[width] duration-300"
           style={{ width: `${pct}%` }}
@@ -594,7 +596,9 @@ export default function TodayView({
           <li
             key={dog.id}
             ref={(node) => setDogCardRef(dog.id, node)}
-            className={sharing ? 'space-y-4 bg-[#FBF9F5] px-5 py-6' : undefined}
+            className={
+              sharing ? 'space-y-4 overflow-visible bg-[#FBF9F5] px-5 py-6' : undefined
+            }
           >
             {sharing ? (
               <div className="flex items-center gap-3">
@@ -609,7 +613,7 @@ export default function TodayView({
                 </div>
               </div>
             ) : null}
-            <Card className="!p-4">
+            <Card className={sharing ? '!p-5 !shadow-none' : '!p-4'}>
               <div className="mb-3 flex items-center gap-3">
                 <DogAvatar
                   name={dog.name}

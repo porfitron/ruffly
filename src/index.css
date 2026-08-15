@@ -74,6 +74,19 @@ body {
   display: none !important;
 }
 
+/* Safari paints box-shadow as a solid offset block in DOM screenshots. */
+[data-sharing] * {
+  box-shadow: none !important;
+}
+
+/* Let names and food titles use the full card instead of leftover ellipsis widths. */
+[data-sharing] .truncate {
+  overflow: visible !important;
+  text-overflow: unset !important;
+  white-space: normal !important;
+  max-width: none !important;
+}
+
 #ruffly-qr-reader {
   width: 100%;
 }
