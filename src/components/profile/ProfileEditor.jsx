@@ -10,7 +10,7 @@ import {
   calculateRER,
   resolveGoalMultiplier,
 } from '../../utils/calculations'
-import DogAvatar from './DogAvatar'
+import DogPhotoPicker from './DogPhotoPicker'
 
 const CALORIE_MODE_OPTIONS = [
   { value: 'manual', label: 'Manual' },
@@ -83,9 +83,11 @@ export default function ProfileEditor({
   )
   const [savedFlash, setSavedFlash] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [photoError, setPhotoError] = useState('')
 
   useEffect(() => {
     setForm(editingDog ? dogToForm(editingDog) : EMPTY_FORM)
+    setPhotoError('')
   }, [editingDog?.id, addingNew])
 
   const preview = previewFromForm(form)
@@ -167,13 +169,38 @@ export default function ProfileEditor({
 
   return (
     <Card className="!p-4">
-      <div className="flex items-center gap-3">
-        <DogAvatar name={form.name} photoUrl={form.photoUrl} size="md" />
+      <div className="flex items-start gap-3">
+        <DogPhotoPicker
+          name={form.name}
+          photoUrl={form.photoUrl}
+          onChange={(photoUrl) => {
+            update('photoUrl', photoUrl)
+            setPhotoError('')
+          }}
+          onError={setPhotoError}
+        />
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-bold text-slate-800">{title}</h2>
           <p className="text-xs text-slate-500">
             Daily target from weight &amp; life stage, or enter it manually.
           </p>
+          {form.photoUrl ? (
+            <button
+              type="button"
+              className="mt-1 text-xs font-semibold text-slate-400 hover:text-slate-600"
+              onClick={() => {
+                update('photoUrl', '')
+                setPhotoError('')
+              }}
+            >
+              Remove photo
+            </button>
+          ) : null}
+          {photoError ? (
+            <p className="mt-1 text-xs text-red-500" role="alert">
+              {photoError}
+            </p>
+          ) : null}
         </div>
         {onCancel ? (
           <button
