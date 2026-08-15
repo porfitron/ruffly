@@ -21,7 +21,7 @@ function CareGuideDogSwitcher() {
     <div className="print:hidden">
       <p className="text-sm font-medium text-slate-700">Whose care guide?</p>
       <div
-        className="-mx-1 mt-2 flex gap-2 overflow-x-auto pb-1"
+        className="-mx-1.5 mt-2 flex gap-2 overflow-x-auto p-1.5"
         role="tablist"
         aria-label="Choose a dog"
       >
