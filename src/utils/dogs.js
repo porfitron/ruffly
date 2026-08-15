@@ -12,13 +12,27 @@ export function sortDogsByName(dogs) {
   )
 }
 
-/** Home dogs A–Z, then paused (away) dogs A–Z. */
-export function sortPackDogs(dogs) {
+/** Home A–Z, then away A–Z. Seeds stored order for packs that predate drag-to-reorder. */
+export function seedPackOrder(dogs) {
   const named = sortDogsByName(dogs)
   return [
     ...named.filter((dog) => !isDogAway(dog)),
     ...named.filter((dog) => isDogAway(dog)),
   ]
+}
+
+/** Reorder dogs to match orderedIds, appending any missing dogs at the end. */
+export function reorderDogs(dogs, orderedIds) {
+  const byId = new Map((dogs ?? []).map((dog) => [dog.id, dog]))
+  const next = []
+  for (const id of orderedIds ?? []) {
+    const dog = byId.get(id)
+    if (!dog) continue
+    next.push(dog)
+    byId.delete(id)
+  }
+  for (const dog of byId.values()) next.push(dog)
+  return next
 }
 
 export function slugifyName(name) {

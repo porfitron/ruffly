@@ -66,6 +66,8 @@ export default function DogSummaryCard({
   showActiveBadge = true,
   showPresence = false,
   onTogglePresence,
+  reorderHandle = null,
+  dragging = false,
 }) {
   const name = dog.name?.trim() || 'Unnamed'
   const away = Boolean(dog.away)
@@ -113,11 +115,16 @@ export default function DogSummaryCard({
 
   return (
     <div
-      className={`rounded-3xl bg-white p-3 shadow-sm transition-shadow ${
-        highlighted ? 'ring-2 ring-[#F59E0B]/40' : 'hover:shadow-md'
+      className={`rounded-3xl bg-white p-3 shadow-sm ${
+        dragging
+          ? 'relative z-10 scale-[1.02] shadow-lg ring-2 ring-[#F59E0B]/40'
+          : highlighted
+            ? 'ring-2 ring-[#F59E0B]/40 transition-shadow'
+            : 'transition-shadow hover:shadow-md'
       }`}
     >
-      <div className="flex items-center gap-3">
+      <div className={`flex items-center ${reorderHandle ? 'gap-2' : 'gap-3'}`}>
+        {reorderHandle}
         {onSelect ? (
           <button
             type="button"

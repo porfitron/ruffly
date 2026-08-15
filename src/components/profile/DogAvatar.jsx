@@ -29,6 +29,7 @@ export default function DogAvatar({
       <img
         src={photoUrl}
         alt=""
+        draggable={false}
         className={`shrink-0 rounded-full object-cover ${sizeClass} ${ringClass} ${className}`}
         aria-hidden
       />

@@ -123,7 +123,11 @@ function TaskRow({ task, onDone, onUndo }) {
         </p>
         <p className="truncate text-xs text-slate-400">
           {kindLabel(task.kind)}
-          {task.slotLabel ? ` · ${task.slotLabel}` : ''}
+          {task.oneTime
+            ? ' · Today only'
+            : task.slotLabel
+              ? ` · ${task.slotLabel}`
+              : ''}
           {amount ? ` · ${amount}` : ''}
         </p>
       </div>
@@ -404,28 +408,17 @@ export default function TodayView({
                     </button>
                   </div>
                   <p className="text-xs text-slate-400">
-                    {hasMenu
-                      ? dueCount === 0
-                        ? 'All done for today'
-                        : `${dueCount} left`
-                      : 'No menu yet'}
+                    {rows.length > 0 && dueCount === 0
+                      ? 'All done for today'
+                      : dueCount > 0
+                        ? `${dueCount} left`
+                        : 'No menu yet'}
                   </p>
                   <KcalBar logged={kcalLogged} target={targetDER} />
                 </div>
               </div>
 
-              {!hasMenu ? (
-                <p className="rounded-2xl bg-[#FBF9F5] px-3 py-3 text-sm text-slate-500">
-                  Set a daily menu so care shows up here.{' '}
-                  <button
-                    type="button"
-                    className="font-semibold text-[#F59E0B]"
-                    onClick={() => onEditMenu?.(dog.id)}
-                  >
-                    Set up
-                  </button>
-                </p>
-              ) : (
+              {rows.length > 0 ? (
                 <ul className="space-y-2">
                   {rows.map((row) =>
                     row.type === 'meal' ? (
@@ -447,7 +440,18 @@ export default function TodayView({
                     ),
                   )}
                 </ul>
-              )}
+              ) : !hasMenu ? (
+                <p className="rounded-2xl bg-[#FBF9F5] px-3 py-3 text-sm text-slate-500">
+                  Set a daily menu so care shows up here.{' '}
+                  <button
+                    type="button"
+                    className="font-semibold text-[#F59E0B]"
+                    onClick={() => onEditMenu?.(dog.id)}
+                  >
+                    Set up
+                  </button>
+                </p>
+              ) : null}
             </Card>
           </li>
         ))}

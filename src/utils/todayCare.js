@@ -67,6 +67,7 @@ export function slotSortKey(slot) {
     night: 4,
     daily: 5,
     as_needed: 9,
+    extra: 10,
   }
   return order[String(slot ?? 'daily').toLowerCase()] ?? 6
 }
@@ -74,6 +75,7 @@ export function slotSortKey(slot) {
 export function formatSlotLabel(slot) {
   const raw = String(slot ?? 'daily')
   if (raw === 'as_needed') return 'As needed'
+  if (raw === 'extra') return 'Today only'
   return raw.charAt(0).toUpperCase() + raw.slice(1)
 }
 
@@ -111,7 +113,8 @@ export function groupTodayTasks(tasks) {
   const standalone = []
 
   for (const task of tasks ?? []) {
-    if (isMealSlot(task.slot)) {
+    // One-time logs stay standalone so they are not mixed into the routine meal.
+    if (!task.oneTime && isMealSlot(task.slot)) {
       const slot = String(task.slot).toLowerCase()
       if (!buckets.has(slot)) buckets.set(slot, [])
       buckets.get(slot).push(task)
@@ -178,17 +181,54 @@ function claimLogsForMenuItems(menuItems, catalog, todayLogs) {
     if (idx >= 0) claimed.set(menuItem.id, remaining.splice(idx, 1)[0])
   }
 
-  return claimed
+  return { claimed, leftover: remaining }
+}
+
+/** Today-only row from a log that is not on the dog’s planned menu. */
+function extraTaskFromLog(dog, log, careItem) {
+  const kind = log.kind || careItem?.kind || 'food'
+  const name =
+    kind === 'weight'
+      ? 'Weight'
+      : careItem?.formula || careItem?.name || log.note?.trim() || kindLabel(kind)
+
+  return {
+    id: `${dog.id}:extra:${log.id}`,
+    dogId: dog.id,
+    dogName: dog.name,
+    dogPhotoUrl: dog.photoUrl,
+    menuItemId: null,
+    careItemId: log.careItemId ?? null,
+    kind,
+    name,
+    brand: careItem?.brand,
+    flavor: careItem?.flavor,
+    slot: 'extra',
+    slotLabel: formatSlotLabel('extra'),
+    amount: log.amount,
+    unit: log.unit,
+    done: true,
+    doneAt: log.loggedAt ?? null,
+    doneLogId: log.id,
+    oneTime: true,
+    targetDER: dog.targetDER ?? null,
+  }
 }
 
 /**
  * Build today’s care rows for one dog.
  * Menu items are due once per local day; completed rows stay visible.
+ * Unclaimed logs (quick-log extras, weight, one-off meds) appear as
+ * today-only tasks and are not added to the planned routine.
  */
 export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date()) {
   const byId = catalogById(catalog)
   const todayLogs = logsForDogOnDay(logs, dog.id, day)
-  const claimed = claimLogsForMenuItems(menuItems, catalog, todayLogs)
+  const { claimed, leftover } = claimLogsForMenuItems(
+    menuItems,
+    catalog,
+    todayLogs,
+  )
 
   const tasks = []
   for (const menuItem of menuItems ?? []) {
@@ -220,11 +260,22 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
     })
   }
 
+  const extras = [...leftover].sort((a, b) => {
+    const at = new Date(a.loggedAt ?? 0).getTime()
+    const bt = new Date(b.loggedAt ?? 0).getTime()
+    return at - bt
+  })
+  for (const log of extras) {
+    const careItem = log.careItemId ? byId.get(log.careItemId) : undefined
+    tasks.push(extraTaskFromLog(dog, log, careItem))
+  }
+
   tasks.sort((a, b) => slotSortKey(a.slot) - slotSortKey(b.slot))
 
   return tasks
 }
 
+/** Home dogs in pack order (away dogs are omitted). */
 export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new Date()) {
   const groups = []
   for (const dog of dogs ?? []) {
@@ -248,11 +299,6 @@ export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new
       hasMenu: menu.length > 0,
     })
   }
-  groups.sort((a, b) =>
-    (a.dog.name || '').localeCompare(b.dog.name || '', undefined, {
-      sensitivity: 'base',
-    }),
-  )
   return groups
 }
 

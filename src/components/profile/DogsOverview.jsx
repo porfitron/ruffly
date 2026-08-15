@@ -1,11 +1,13 @@
 import { useState } from 'react'
+import { GripVertical } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import { Field, SegmentedControl } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
+import { useHoldReorder } from '../../hooks/useHoldReorder'
 import { getDogProfileCompletion } from '../../utils/storage'
 import { kindLabel } from '../../utils/todayCare'
-import { isDogAway, sortPackDogs } from '../../utils/dogs'
+import { isDogAway } from '../../utils/dogs'
 import DogSummaryCard from './DogSummaryCard'
 import ProfileEditor from './ProfileEditor'
 
@@ -128,7 +130,22 @@ export default function DogsOverview({
   const { dogs, dispatch } = useApp()
   const [expandedDogId, setExpandedDogId] = useState(null)
   const [editingDogId, setEditingDogId] = useState(null)
-  const orderedDogs = sortPackDogs(dogs)
+  const canReorder = dogs.length > 1
+  const { currentIds, draggingId, setItemRef, bindHandle } = useHoldReorder({
+    ids: dogs.map((dog) => dog.id),
+    enabled: canReorder,
+    onStart: () => {
+      setExpandedDogId(null)
+      setEditingDogId(null)
+    },
+    onCommit: (orderedIds) => {
+      dispatch({ type: 'REORDER_DOGS', payload: orderedIds })
+    },
+  })
+  const dogsById = new Map(dogs.map((dog) => [dog.id, dog]))
+  const orderedDogs = currentIds
+    .map((id) => dogsById.get(id))
+    .filter(Boolean)
 
   function handleSelect(id) {
     setEditingDogId(null)
@@ -168,16 +185,23 @@ export default function DogsOverview({
       <div className="px-0.5">
         <h2 className="text-lg font-bold text-slate-800">Your pack</h2>
         <p className="text-sm text-slate-500">
-          Tap a dog for menu and profile. Pause visiting pups when they’re away.
+          {canReorder
+            ? 'Tap a dog for menu and profile. Hold the grip to reorder.'
+            : 'Tap a dog for menu and profile. Pause visiting pups when they’re away.'}
         </p>
       </div>
 
-      <ul className="space-y-2">
+      <ul className={`space-y-2 ${draggingId ? 'select-none' : ''}`}>
         {orderedDogs.map((dog) => {
-          const expanded = dog.id === expandedDogId
-          const editing = dog.id === editingDogId
+          const expanded = dog.id === expandedDogId && !draggingId
+          const editing = dog.id === editingDogId && !draggingId
+          const name = dog.name?.trim() || 'Unnamed'
           return (
-            <li key={dog.id} className={expanded ? 'space-y-2' : undefined}>
+            <li
+              key={dog.id}
+              ref={(node) => setItemRef(dog.id, node)}
+              className={expanded ? 'space-y-2' : undefined}
+            >
               <DogSummaryCard
                 dog={dog}
                 active={false}
@@ -185,6 +209,24 @@ export default function DogsOverview({
                 expanded={expanded}
                 portionSnippet={null}
                 showPresence
+                dragging={dog.id === draggingId}
+                reorderHandle={
+                  canReorder ? (
+                    <button
+                      type="button"
+                      className={`flex h-11 w-8 shrink-0 items-center justify-center select-none [-webkit-touch-callout:none] hover:text-slate-400 ${
+                        dog.id === draggingId
+                          ? 'cursor-grabbing touch-none text-slate-400'
+                          : 'cursor-grab touch-manipulation text-slate-300'
+                      }`}
+                      aria-label={`Hold and drag to reorder ${name}`}
+                      aria-grabbed={dog.id === draggingId}
+                      {...bindHandle(dog.id)}
+                    >
+                      <GripVertical size={18} strokeWidth={2.5} aria-hidden />
+                    </button>
+                  ) : null
+                }
                 onSelect={() => handleSelect(dog.id)}
                 onTogglePresence={() =>
                   dispatch({

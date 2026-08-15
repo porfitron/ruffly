@@ -25,6 +25,7 @@ import {
   findDogByPupParam,
   pupSearchForState,
   readPupParam,
+  reorderDogs,
   uniqueDogSlug,
 } from '../utils/dogs'
 import { msUntilNextLocalMidnight, syncHomeScreenBadge } from '../utils/appBadge'
@@ -255,6 +256,11 @@ function reducer(state, action) {
     }
     case 'SET_ACTIVE_DOG':
       return { ...state, activeDogId: action.payload }
+    case 'REORDER_DOGS': {
+      const orderedIds = action.payload
+      if (!Array.isArray(orderedIds) || orderedIds.length === 0) return state
+      return { ...state, dogs: reorderDogs(state.dogs, orderedIds) }
+    }
     case 'REMOVE_DOG': {
       const dogId = action.payload
       const dogs = state.dogs.filter((d) => d.id !== dogId)

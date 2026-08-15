@@ -1,4 +1,4 @@
-import { uniqueDogSlug } from './dogs'
+import { seedPackOrder, uniqueDogSlug } from './dogs'
 
 const STORAGE_KEY = 'ruffly_app_data_v1'
 
@@ -29,6 +29,8 @@ export const DEFAULT_APP_DATA = {
     userEmail: null,
   },
   badgePromptDismissed: false,
+  // Stored dogs[] order is the pack list. Seeded from home/away A–Z on first load.
+  packOrder: 'manual',
 }
 
 export const EMPTY_CARE_INFO = {
@@ -436,6 +438,10 @@ export function normalizeAppData(raw) {
       menuDoneHint: (migrated.menusByDogId[dog.id] ?? []).length > 0,
     }),
   )
+  const orderedDogs =
+    parsed.packOrder === 'manual'
+      ? normalizedDogs
+      : seedPackOrder(normalizedDogs)
 
   const {
     currentMealPlan: _legacyMealPlan,
@@ -446,7 +452,8 @@ export function normalizeAppData(raw) {
   return {
     ...base,
     ...parsedWithoutLegacy,
-    dogs: normalizedDogs,
+    dogs: orderedDogs,
+    packOrder: 'manual',
     activeDogId,
     catalog,
     menusByDogId: migrated.menusByDogId,
