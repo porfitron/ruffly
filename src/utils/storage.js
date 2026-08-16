@@ -10,7 +10,7 @@ export const EMPTY_OWNER_ACCOUNT = {
 }
 
 export const CARE_ITEM_KINDS = ['food', 'med', 'supplement']
-export const LOG_KINDS = ['food', 'med', 'supplement', 'weight']
+export const LOG_KINDS = ['food', 'med', 'supplement', 'weight', 'activity']
 
 export const DEFAULT_APP_DATA = {
   activeDogId: null,
@@ -241,6 +241,7 @@ function normalizeLog(raw) {
     loggedAt: raw.loggedAt || new Date().toISOString(),
     note: raw.note ?? '',
     menuItemId: raw.menuItemId ?? null,
+    ...(raw.label ? { label: raw.label } : {}),
   }
 }
 

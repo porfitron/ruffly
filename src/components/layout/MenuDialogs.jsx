@@ -99,7 +99,7 @@ function SharePlanDialog({ open, onClose }) {
   const multi = qrUrls.length > 1
 
   return (
-    <Modal open={open} title="Share Plan" onClose={onClose}>
+    <Modal open={open} title="Export Plan" onClose={onClose}>
       <p className="text-sm text-slate-500">
         {multi
           ? 'Codes cycle until the other phone has the full plan. Turn up brightness and hold steady. Pause if they need more time on one code.'
@@ -329,7 +329,7 @@ function ReceivePlanDialog({ open, onClose }) {
   return (
     <Modal open={open} title="Receive Plan" onClose={close}>
       <p className="text-sm text-slate-500">
-        Point your camera at a Ruffly Share Plan QR code. Larger plans send
+        Point your camera at a Ruffly Export Plan QR code. Larger plans send
         several codes in a loop — keep scanning until this screen fills in.
       </p>
       <div className="mt-4 overflow-hidden rounded-3xl bg-slate-900">

@@ -38,10 +38,14 @@ export default function WebApp() {
   const [logOpen, setLogOpen] = useState(false)
   const [menuDogId, setMenuDogId] = useState(null)
   const [newDogMenu, setNewDogMenu] = useState(false)
-  const [tonguePlayId, setTonguePlayId] = useState(null)
+  const [celebration, setCelebration] = useState(null)
 
   const accountIncomplete = isOwnerAccountIncomplete(ownerAccount)
-  const dismissTongues = useCallback(() => setTonguePlayId(null), [])
+  const dismissCelebration = useCallback(() => setCelebration(null), [])
+  const playCelebration = useCallback((theme) => {
+    if (!theme) return
+    setCelebration({ theme, playId: Date.now() })
+  }, [])
 
   function handleTabChange(id) {
     if (id === activeTab) {
@@ -75,10 +79,10 @@ export default function WebApp() {
     },
     {
       id: 'care',
-      label: 'Care Guide',
+      label: 'Print Care Guide',
       onClick: () => handleTabChange('care'),
     },
-    { id: 'share', label: 'Share Plan', onClick: () => setMenuDialog('share') },
+    { id: 'share', label: 'Export Plan', onClick: () => setMenuDialog('share') },
     {
       id: 'receive',
       label: 'Receive Plan',
@@ -161,13 +165,17 @@ export default function WebApp() {
         ) : null}
       </div>
 
-      <QuickLogSheet open={logOpen} onClose={() => setLogOpen(false)} />
+      <QuickLogSheet
+        open={logOpen}
+        onClose={() => setLogOpen(false)}
+        onCelebrate={playCelebration}
+      />
       <MenuEditorSheet
         open={Boolean(menuDogId)}
         dogId={menuDogId === 'pick' ? null : menuDogId}
         onDogChange={(id) => setMenuDogId(id)}
         onDone={() => {
-          if (newDogMenu) setTonguePlayId(Date.now())
+          if (newDogMenu) playCelebration('tongue')
           setNewDogMenu(false)
         }}
         onClose={() => {
@@ -177,9 +185,9 @@ export default function WebApp() {
       />
 
       <MealCelebration
-        playId={tonguePlayId}
-        theme="tongue"
-        onDone={dismissTongues}
+        playId={celebration?.playId ?? null}
+        theme={celebration?.theme ?? 'tongue'}
+        onDone={dismissCelebration}
       />
 
       <MenuDialogs dialog={menuDialog} onClose={() => setMenuDialog(null)} />

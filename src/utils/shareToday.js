@@ -1,5 +1,6 @@
 import { domToPng } from 'modern-screenshot'
 import { slugifyName } from './dogs'
+import { isSameLocalDay } from './todayCare'
 
 const CREAM = '#FBF9F5'
 const IOS_MAX_CANVAS = 4096
@@ -16,7 +17,10 @@ export function packUpdateCaption(totalDue, day = new Date()) {
   const date = formatPackUpdateDate(day)
   if (totalDue === 0) return `${date} — all caught up`
   const noun = totalDue === 1 ? 'care item' : 'care items'
-  return `${date} — ${totalDue} ${noun} left`
+  const status = isSameLocalDay(day)
+    ? `${totalDue} ${noun} left`
+    : `${totalDue} ${noun} not logged`
+  return `${date} — ${status}`
 }
 
 function localIsoDate(day = new Date()) {
@@ -53,7 +57,7 @@ async function captureNodePngDataUrl(node) {
   await domToPng(node, options)
   const dataUrl = await domToPng(node, options)
   if (!dataUrl || dataUrl.length < 1000) {
-    throw new Error('Couldn’t create a photo of Today. Try again.')
+    throw new Error('Couldn’t create a photo of the log. Try again.')
   }
   return dataUrl
 }
@@ -73,10 +77,10 @@ function dataUrlToFile(dataUrl, filename) {
 
 function uniquePngName(name, date, used) {
   const base = slugifyName(name) || 'pup'
-  let filename = `ruffly-today-${base}-${date}.png`
+  let filename = `ruffly-log-${base}-${date}.png`
   let n = 2
   while (used.has(filename)) {
-    filename = `ruffly-today-${base}-${n}-${date}.png`
+    filename = `ruffly-log-${base}-${n}-${date}.png`
     n += 1
   }
   used.add(filename)
@@ -121,13 +125,16 @@ async function shareFiles(files, { title, text }) {
 }
 
 /** Capture each dog card as its own PNG and open the system share sheet. */
-export async function shareTodayScreenshots(items, { totalDue = 0 } = {}) {
+export async function shareTodayScreenshots(
+  items,
+  { totalDue = 0, day = new Date() } = {},
+) {
   const captures = (items ?? []).filter((item) => item?.node)
   if (captures.length === 0) {
-    throw new Error('Couldn’t create a photo of Today. Try again.')
+    throw new Error('Couldn’t create a photo of the log. Try again.')
   }
 
-  const date = localIsoDate()
+  const date = localIsoDate(day)
   const used = new Set()
   const files = []
   for (const { node, name } of captures) {
@@ -139,7 +146,10 @@ export async function shareTodayScreenshots(items, { totalDue = 0 } = {}) {
 
   const title =
     captures.length === 1
-      ? `${captures[0].name || 'Today'} · Ruffly`
-      : 'Ruffly pack update'
-  return shareFiles(files, { title, text: packUpdateCaption(totalDue) })
+      ? `${captures[0].name || 'Log'} · Ruffly`
+      : 'Ruffly pack log'
+  return shareFiles(files, {
+    title,
+    text: packUpdateCaption(totalDue, day),
+  })
 }

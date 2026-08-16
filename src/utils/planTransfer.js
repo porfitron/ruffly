@@ -309,6 +309,7 @@ function logsToCompact(state) {
     log.loggedAt ?? null,
     compactText(log.note),
     log.menuItemId ?? null,
+    compactText(log.label),
   ])
 }
 
@@ -325,6 +326,7 @@ function logsFromCompact(compact) {
     loggedAt: row[7],
     ...(row[8] ? { note: row[8] } : {}),
     ...(row[9] ? { menuItemId: row[9] } : {}),
+    ...(row[10] ? { label: row[10] } : {}),
   }))
 }
 

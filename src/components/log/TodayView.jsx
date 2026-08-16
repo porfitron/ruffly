@@ -2,6 +2,8 @@ import { useCallback, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import {
   Check,
+  ChevronLeft,
+  ChevronRight,
   Circle,
   GripVertical,
   Minus,
@@ -22,10 +24,16 @@ import {
   shareTodayScreenshots,
 } from '../../utils/shareToday'
 import {
+  addLocalDays,
   buildPackTodayTasks,
   estimateFoodKcal,
+  formatTodayHeading,
+  isSameLocalDay,
   isTodayDailyRow,
+  isTodayQuickLogRow,
+  isoTimestampOnDay,
   kindLabel,
+  startOfLocalDay,
   todayRowKey,
 } from '../../utils/todayCare'
 
@@ -170,11 +178,7 @@ function TaskRow({
         </p>
         <p className="truncate text-xs text-slate-400">
           {kindLabel(task.kind)}
-          {task.oneTime
-            ? ' · Today only'
-            : task.slotLabel
-              ? ` · ${task.slotLabel}`
-              : ''}
+          {task.slotLabel ? ` · ${task.slotLabel}` : ''}
           {amount ? ` · ${amount}` : ''}
         </p>
       </div>
@@ -309,6 +313,7 @@ function TodayTaskRow({
 function DogTodayTaskList({
   dog,
   rows,
+  canReorderRows = true,
   onMealDone,
   onMealUndo,
   onItemDone,
@@ -319,7 +324,9 @@ function DogTodayTaskList({
   const pinned = rows.filter((row) => todayRowKey(row) == null)
   const ids = movable.map((row) => row.id)
   const canReorder =
-    movable.some(isTodayDailyRow) && movable.length > 1
+    canReorderRows &&
+    movable.some((row) => isTodayDailyRow(row) || isTodayQuickLogRow(row)) &&
+    movable.length > 1
   const { currentIds, draggingId, setItemRef, bindHandle } = useHoldReorder({
     ids,
     enabled: canReorder,
@@ -350,7 +357,8 @@ function DogTodayTaskList({
           rowRef={(node) => setItemRef(row.id, node)}
           dragging={row.id === draggingId}
           reorderHandle={
-            canReorder && isTodayDailyRow(row) ? (
+            canReorder &&
+            (isTodayDailyRow(row) || isTodayQuickLogRow(row)) ? (
               <ReorderGrip
                 name={row.task.name}
                 dragging={row.id === draggingId}
@@ -374,6 +382,51 @@ function DogTodayTaskList({
   )
 }
 
+function DayHeading({
+  day,
+  onPrev,
+  onNext,
+  canGoForward,
+  subtitle,
+  shareButton = null,
+}) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 px-0.5">
+      <p className="truncate text-sm leading-5 text-slate-500">{subtitle}</p>
+      <div className="flex items-center">
+        <button
+          type="button"
+          className="share-hide flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-amber-50 hover:text-[#F59E0B]"
+          onClick={onPrev}
+          aria-label="Previous day"
+        >
+          <ChevronLeft size={22} strokeWidth={2.5} />
+        </button>
+        <h2
+          className="min-w-[5.5rem] text-center text-lg font-bold tabular-nums text-slate-800"
+          aria-live="polite"
+        >
+          {formatTodayHeading(day)}
+        </h2>
+        <button
+          type="button"
+          className={`share-hide flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+            canGoForward
+              ? 'text-slate-400 hover:bg-amber-50 hover:text-[#F59E0B]'
+              : 'cursor-default text-slate-200'
+          }`}
+          onClick={onNext}
+          disabled={!canGoForward}
+          aria-label="Next day"
+        >
+          <ChevronRight size={22} strokeWidth={2.5} />
+        </button>
+      </div>
+      <div className="flex justify-end">{shareButton}</div>
+    </div>
+  )
+}
+
 /** Post-onboarding home — care due today across the pack. */
 export default function TodayView({
   onLog,
@@ -383,13 +436,40 @@ export default function TodayView({
 }) {
   const { dogs, catalog, menusByDogId, logs, dispatch } = useApp()
   const dogCardRefs = useRef(new Map())
+  const [viewingDay, setViewingDay] = useState(() => startOfLocalDay())
   const [celebration, setCelebration] = useState(null)
   const [sharing, setSharing] = useState(false)
   const [shareError, setShareError] = useState('')
-  const groups = buildPackTodayTasks(dogs, menusByDogId, catalog, logs)
+  const viewingToday = isSameLocalDay(viewingDay)
+  const groups = buildPackTodayTasks(
+    dogs,
+    menusByDogId,
+    catalog,
+    logs,
+    viewingDay,
+  )
   const homeDogs = dogs.filter((dog) => !isDogAway(dog))
   const totalDue = groups.reduce((sum, g) => sum + g.dueCount, 0)
   const totalTasks = groups.reduce((sum, g) => sum + g.tasks.length, 0)
+
+  function shiftDay(delta) {
+    const next = addLocalDays(viewingDay, delta)
+    if (next.getTime() > startOfLocalDay().getTime()) return
+    setViewingDay(next)
+  }
+
+  const headingSubtitle =
+    totalTasks === 0
+      ? viewingToday
+        ? 'Nothing on the menu yet'
+        : 'No logs this day'
+      : totalDue === 0
+        ? viewingToday
+          ? 'You’re all caught up'
+          : 'All caught up that day'
+        : viewingToday
+          ? `${totalDue} care item${totalDue === 1 ? '' : 's'} left`
+          : `${totalDue} not logged`
   const playCelebration = useCallback((theme) => {
     if (!theme) return
     setCelebration({ theme, playId: Date.now() })
@@ -401,7 +481,7 @@ export default function TodayView({
     else dogCardRefs.current.delete(id)
   }
 
-  async function handleShareUpdates() {
+  async function handleShareLog() {
     if (sharing) return
     setShareError('')
     flushSync(() => setSharing(true))
@@ -415,11 +495,11 @@ export default function TodayView({
           name: dog.name,
         }))
         .filter((item) => item.node)
-      await shareTodayScreenshots(items, { totalDue })
+      await shareTodayScreenshots(items, { totalDue, day: viewingDay })
     } catch (err) {
       if (err?.name !== 'AbortError') {
         setShareError(
-          err?.message || 'Couldn’t share the update. Try again.',
+          err?.message || 'Couldn’t share the log. Try again.',
         )
       }
     } finally {
@@ -443,12 +523,15 @@ export default function TodayView({
         kcal,
         menuItemId: task.menuItemId,
         note: '',
+        loggedAt: isoTimestampOnDay(viewingDay),
       },
     })
   }
 
   function handleDone(task) {
-    const theme = celebrationWhenCompleting(groups, task)
+    const theme = viewingToday
+      ? celebrationWhenCompleting(groups, task)
+      : null
     logTask(task)
     playCelebration(theme)
   }
@@ -460,7 +543,8 @@ export default function TodayView({
   }
 
   function handleMealDone(meal) {
-    const theme = meal.done ? null : celebrationThemeForSlot(meal.slot)
+    const theme =
+      viewingToday && !meal.done ? celebrationThemeForSlot(meal.slot) : null
     for (const item of meal.items) {
       if (!item.done) logTask(item)
     }
@@ -518,19 +602,33 @@ export default function TodayView({
   if (totalTasks === 0) {
     return (
       <div className="space-y-4">
+        <DayHeading
+          day={viewingDay}
+          onPrev={() => shiftDay(-1)}
+          onNext={() => shiftDay(1)}
+          canGoForward={!viewingToday}
+          subtitle={headingSubtitle}
+        />
         <Card className="space-y-3 text-center">
-          <h2 className="text-lg font-bold text-slate-800">Nothing on the menu yet</h2>
+          <h2 className="text-lg font-bold text-slate-800">
+            {viewingToday ? 'Nothing on the menu yet' : 'No logs this day'}
+          </h2>
           <p className="text-sm text-slate-500">
-            Build a daily routine for food, meds, and supplements — then check
-            them off here like watering your plants.
+            {viewingToday
+              ? 'Build a daily routine for food, meds, and supplements — then check them off here like watering your plants.'
+              : 'There’s nothing recorded for this date. Check a day with logs, or set up a menu to see the routine here.'}
           </p>
-          <Button className="w-full" onClick={() => onEditMenu?.()}>
-            Set up a menu
-          </Button>
-          <Button variant="secondary" className="w-full" onClick={onLog}>
-            <Plus size={18} />
-            Log something anyway
-          </Button>
+          {viewingToday ? (
+            <>
+              <Button className="w-full" onClick={() => onEditMenu?.()}>
+                Set up a menu
+              </Button>
+              <Button variant="secondary" className="w-full" onClick={onLog}>
+                <Plus size={18} />
+                Log something anyway
+              </Button>
+            </>
+          ) : null}
         </Card>
       </div>
     )
@@ -545,7 +643,7 @@ export default function TodayView({
           aria-live="polite"
         >
           <p className="text-sm font-semibold text-[#F59E0B]">
-            Preparing update…
+            Preparing log…
           </p>
         </div>
       ) : null}
@@ -554,26 +652,25 @@ export default function TodayView({
         data-sharing={sharing ? 'true' : undefined}
         className="space-y-4"
       >
-        <div className="flex items-end justify-between gap-3 px-0.5">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-bold text-slate-800">Today</h2>
-            <p className="text-sm leading-5 text-slate-500">
-              {totalDue === 0
-                ? 'You’re all caught up'
-                : `${totalDue} care item${totalDue === 1 ? '' : 's'} left`}
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            className="share-hide !h-10 shrink-0 whitespace-nowrap px-3 text-[#F59E0B]"
-            onClick={handleShareUpdates}
-            disabled={sharing}
-            aria-busy={sharing}
-          >
-            Share Updates
-            <Share size={18} />
-          </Button>
-        </div>
+        <DayHeading
+          day={viewingDay}
+          onPrev={() => shiftDay(-1)}
+          onNext={() => shiftDay(1)}
+          canGoForward={!viewingToday}
+          subtitle={headingSubtitle}
+          shareButton={
+            <Button
+              variant="ghost"
+              className="share-hide !h-10 shrink-0 whitespace-nowrap px-3 text-[#F59E0B]"
+              onClick={handleShareLog}
+              disabled={sharing}
+              aria-busy={sharing}
+            >
+              Share Log
+              <Share size={18} />
+            </Button>
+          }
+        />
 
       {shareError ? (
         <p className="share-hide px-0.5 text-sm text-red-600">{shareError}</p>
@@ -585,8 +682,9 @@ export default function TodayView({
             Pack’s looking good
           </p>
           <p className="mt-1 text-sm text-emerald-700/80">
-            Everything on today’s menus is logged. Tap Log if something extra
-            happened.
+            {viewingToday
+              ? 'Everything on today’s menus is logged. Tap Log if something extra happened.'
+              : 'Everything on this day’s menus was logged.'}
           </p>
         </Card>
       ) : null}
@@ -608,7 +706,7 @@ export default function TodayView({
                     Ruffly
                   </p>
                   <p className="whitespace-nowrap text-xs leading-5 text-slate-500">
-                    {dog.name} · {formatPackUpdateDate()}
+                    {dog.name} · {formatPackUpdateDate(viewingDay)}
                   </p>
                 </div>
               </div>
@@ -635,7 +733,9 @@ export default function TodayView({
                   </div>
                   <p className="text-xs text-slate-400">
                     {rows.length > 0 && dueCount === 0
-                      ? 'All done for today'
+                      ? viewingToday
+                        ? 'All done for today'
+                        : 'All done'
                       : dueCount > 0
                         ? `${dueCount} left`
                         : 'No menu yet'}
@@ -648,6 +748,7 @@ export default function TodayView({
                 <DogTodayTaskList
                   dog={dog}
                   rows={rows}
+                  canReorderRows={viewingToday}
                   onMealDone={handleMealDone}
                   onMealUndo={handleMealUndo}
                   onItemDone={handleDone}

@@ -20,6 +20,11 @@ const THEMES = {
     label: 'New pup saved',
     wash: 'bg-gradient-to-b from-rose-200/90 via-pink-200/80 to-orange-100/85',
   },
+  play: {
+    emoji: '🎾',
+    label: 'Play logged',
+    wash: 'bg-gradient-to-b from-lime-300/90 via-yellow-200/80 to-emerald-100/85',
+  },
 }
 
 function makeBursts() {

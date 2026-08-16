@@ -377,6 +377,7 @@ function reducer(state, action) {
         loggedAt: payload.loggedAt || new Date().toISOString(),
         note: payload.note ?? '',
         menuItemId: payload.menuItemId ?? null,
+        ...(payload.label ? { label: payload.label } : {}),
       }
       return { ...state, logs: [...(state.logs ?? []), log] }
     }

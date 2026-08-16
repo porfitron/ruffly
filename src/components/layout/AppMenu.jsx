@@ -2,6 +2,9 @@ import { Link } from 'react-router-dom'
 import { X } from 'lucide-react'
 import Button from '../ui/Button'
 
+/** Bump the date (yymmdd) and daily counter when shipping a Free build. */
+const APP_VERSION_LABEL = 'Ruffly Free Version 260816(1)'
+
 const itemClassName = (danger) =>
   `flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold transition-colors hover:bg-amber-50 ${
     danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-800'
@@ -38,7 +41,7 @@ export default function AppMenu({ open, onClose, items = [] }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))]">
-          <p className="text-lg font-bold text-slate-800">Menu</p>
+          <p className="text-lg font-bold text-slate-800">App Menu</p>
           <Button
             variant="ghost"
             className="h-10 w-10 !rounded-full px-0"
@@ -49,7 +52,7 @@ export default function AppMenu({ open, onClose, items = [] }) {
           </Button>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 px-2 pb-6">
+        <nav className="flex flex-1 flex-col gap-1 px-2">
           {items.length === 0 ? (
             <p className="px-3 py-2 text-sm text-slate-400">No items yet</p>
           ) : (
@@ -79,6 +82,10 @@ export default function AppMenu({ open, onClose, items = [] }) {
             )
           )}
         </nav>
+
+        <p className="px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 text-center text-[11px] leading-snug text-slate-400">
+          {APP_VERSION_LABEL}
+        </p>
       </div>
     </div>
   )

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Search } from 'lucide-react'
+import { ChevronLeft, Plus, Search } from 'lucide-react'
 import Modal from '../ui/Modal'
 import Button from '../ui/Button'
 import { Field, SegmentedControl, fieldClassName } from '../ui/Field'
@@ -11,13 +11,20 @@ import FoodCreateFields, {
   buildFoodCareItem,
   foodListLabel,
 } from '../catalog/FoodCreateFields'
+import LogChoice from './LogChoice'
 
-const KIND_OPTIONS = [
-  { value: 'food', label: 'Food' },
-  { value: 'med', label: 'Med' },
-  { value: 'supplement', label: 'Supp' },
-  { value: 'weight', label: 'Weight' },
+const ACTIVITY_OPTIONS = [
+  { value: 'walk', label: 'Walk' },
+  { value: 'play', label: 'Play' },
+  { value: 'training', label: 'Training' },
+  { value: 'other', label: 'Other' },
 ]
+
+const ACTIVITY_LABELS = {
+  walk: 'Walk',
+  play: 'Play',
+  training: 'Training',
+}
 
 const SLOT_OPTIONS = [
   { value: 'breakfast', label: 'Breakfast' },
@@ -26,46 +33,55 @@ const SLOT_OPTIONS = [
   { value: 'as_needed', label: 'As needed' },
 ]
 
-/** Quick log sheet — pick or create catalog item, then ADD_LOG. */
+/** Quick log sheet — choose Food / Weight / Activity, then ADD_LOG. */
 export default function QuickLogSheet({
   open,
   onClose,
+  onCelebrate,
   initialDogId = null,
-  initialKind = 'food',
+  initialKind = null,
 }) {
   const { dogs, activeDogId, catalog, dispatch, createId } = useApp()
+  const skipChoice = Boolean(initialKind)
+  const [step, setStep] = useState(skipChoice ? 'form' : 'choose')
   const [dogId, setDogId] = useState(initialDogId || activeDogId || dogs[0]?.id)
-  const [kind, setKind] = useState(initialKind)
+  const [kind, setKind] = useState(initialKind || 'food')
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(null)
   const [amount, setAmount] = useState('')
   const [unit, setUnit] = useState('')
   const [note, setNote] = useState('')
+  const [activityType, setActivityType] = useState('walk')
   const [creating, setCreating] = useState(false)
-  const [createForm, setCreateForm] = useState(() => emptyCreate(initialKind))
+  const [createForm, setCreateForm] = useState(() =>
+    emptyCreate(initialKind || 'food'),
+  )
 
   const dog = dogs.find((d) => d.id === dogId) ?? dogs[0]
+  const choosing = step === 'choose' && !skipChoice
 
   useEffect(() => {
     if (!open) return
     setDogId(initialDogId || activeDogId || dogs[0]?.id)
-    setKind(initialKind)
+    setKind(initialKind || 'food')
+    setStep(initialKind ? 'form' : 'choose')
     setQuery('')
     setSelectedId(null)
     setAmount('')
-    setUnit(initialKind === 'weight' ? 'lbs' : '')
+    setUnit(initialKind === 'weight' ? 'lbs' : initialKind === 'activity' ? 'min' : '')
     setNote('')
+    setActivityType('walk')
     setCreating(false)
-    setCreateForm(emptyCreate(initialKind))
+    setCreateForm(emptyCreate(initialKind || 'food'))
     // Only reset when the sheet opens
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const candidates = useMemo(() => {
-    if (kind === 'weight') return []
+    if (kind !== 'food') return []
     const q = query.trim().toLowerCase()
     return (catalog ?? [])
-      .filter((item) => item.kind === kind)
+      .filter((item) => item.kind === 'food')
       .filter((item) => {
         if (!q) return true
         const hay = [
@@ -95,17 +111,29 @@ export default function QuickLogSheet({
     setUnit(item.unit ?? '')
   }
 
-  function handleKindChange(next) {
+  function applyKind(next) {
     setKind(next)
     setSelectedId(null)
     setCreating(false)
     setQuery('')
     setCreateForm(emptyCreate(next))
-    setAmount('')
-    setUnit(next === 'weight' ? (dog?.weightUnit ?? 'lbs') : '')
-    if (next === 'weight' && dog?.weight) {
-      setAmount(String(dog.weight))
+    setNote('')
+    setActivityType('walk')
+    if (next === 'weight') {
+      setUnit(dog?.weightUnit ?? 'lbs')
+      setAmount(dog?.weight ? String(dog.weight) : '')
+    } else if (next === 'activity') {
+      setUnit('min')
+      setAmount('')
+    } else {
+      setUnit('')
+      setAmount('')
     }
+  }
+
+  function handlePickKind(next) {
+    applyKind(next)
+    setStep('form')
   }
 
   function handleSave() {
@@ -139,29 +167,36 @@ export default function QuickLogSheet({
       return
     }
 
+    if (kind === 'activity') {
+      const minutes = Number(amount)
+      if (!Number.isFinite(minutes) || minutes <= 0) return
+      const label =
+        activityType === 'other'
+          ? note.trim() || 'Activity'
+          : ACTIVITY_LABELS[activityType] || 'Activity'
+      const extraNote = activityType === 'other' ? '' : note.trim()
+      dispatch({
+        type: 'ADD_LOG',
+        payload: {
+          dogId: dog.id,
+          careItemId: null,
+          kind: 'activity',
+          amount: minutes,
+          unit: 'min',
+          kcal: null,
+          note: extraNote,
+          label,
+        },
+      })
+      onClose?.()
+      if (activityType === 'play') onCelebrate?.('play')
+      return
+    }
+
     let careItem = selected
     if (creating) {
-      if (kind === 'food') {
-        if (!foodCreateIsValid(createForm)) return
-        careItem = buildFoodCareItem(createForm, createId('item'))
-      } else {
-        const name = createForm.name.trim()
-        if (!name) return
-        const defaultAmount = createForm.defaultAmount
-          ? Number(createForm.defaultAmount)
-          : null
-        careItem = {
-          id: createId('item'),
-          kind,
-          name,
-          brand: createForm.brand.trim(),
-          notes: '',
-          defaultAmount: Number.isFinite(defaultAmount) ? defaultAmount : null,
-          unit: createForm.unit.trim() || 'unit',
-          kcalPerUnit: null,
-          productUrl: '',
-        }
-      }
+      if (!foodCreateIsValid(createForm)) return
+      careItem = buildFoodCareItem(createForm, createId('item'))
       dispatch({ type: 'UPSERT_CARE_ITEM', payload: careItem })
     }
 
@@ -194,211 +229,214 @@ export default function QuickLogSheet({
     Boolean(dog) &&
     (kind === 'weight'
       ? Number(amount) > 0
-      : creating
-        ? kind === 'food'
+      : kind === 'activity'
+        ? Number(amount) > 0 &&
+          (activityType !== 'other' || Boolean(note.trim()))
+        : creating
           ? foodCreateIsValid(createForm)
-          : Boolean(createForm.name?.trim())
-        : Boolean(selected))
+          : Boolean(selected))
+
+  const modalTitle = choosing
+    ? 'What to log?'
+    : `Log ${kindLabel(kind).toLowerCase()}`
 
   return (
-    <Modal open={open} title="Log care" onClose={onClose}>
-      <div className="max-h-[70vh] space-y-4 overflow-y-auto">
-        {dogs.length > 1 ? (
-          <Field label="Dog">
-            <select
-              className={fieldClassName}
-              value={dog?.id ?? ''}
-              onChange={(e) => setDogId(e.target.value)}
-            >
-              {dogs.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        ) : null}
+    <Modal open={open} title={modalTitle} onClose={onClose}>
+      {choosing ? (
+        <LogChoice onPick={handlePickKind} />
+      ) : (
+        <>
+          <div className="max-h-[70vh] space-y-4 overflow-y-auto">
+            {!skipChoice ? (
+              <button
+                type="button"
+                onClick={() => setStep('choose')}
+                className="inline-flex h-11 items-center gap-1 text-sm font-semibold text-[#F59E0B]"
+              >
+                <ChevronLeft size={18} strokeWidth={2.5} />
+                Back
+              </button>
+            ) : null}
 
-        <Field label="What happened?">
-          <SegmentedControl
-            value={kind}
-            onChange={handleKindChange}
-            options={KIND_OPTIONS}
-            ariaLabel="Log type"
-          />
-        </Field>
-
-        {kind !== 'weight' ? (
-          <>
-            {!creating ? (
-              <div className="space-y-2">
-                <div className="relative">
-                  <Search
-                    size={16}
-                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-                  <input
-                    className={`${fieldClassName} !mt-0 pl-10`}
-                    placeholder={`Search ${kindLabel(kind).toLowerCase()}s…`}
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    aria-label="Search catalog"
-                  />
-                </div>
-                <ul className="max-h-40 space-y-1 overflow-y-auto">
-                  {candidates.map((item) => {
-                    const active = item.id === selectedId
-                    const label =
-                      item.kind === 'food' ? foodListLabel(item) : item.name
-                    return (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          onClick={() => pickItem(item)}
-                          className={`flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm transition-colors ${
-                            active
-                              ? 'bg-amber-50 font-semibold text-[#F59E0B] ring-1 ring-amber-200'
-                              : 'bg-[#FBF9F5] text-slate-700 hover:bg-amber-50/80'
-                          }`}
-                        >
-                          <span className="truncate">{label}</span>
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-                <Button
-                  variant="secondary"
-                  className="w-full !h-11"
-                  onClick={() => {
-                    setCreating(true)
-                    setSelectedId(null)
-                    setCreateForm(emptyCreate(kind, query.trim()))
+            {dogs.length > 1 ? (
+              <Field label="Dog">
+                <select
+                  className={fieldClassName}
+                  value={dog?.id ?? ''}
+                  onChange={(e) => {
+                    const nextId = e.target.value
+                    setDogId(nextId)
+                    const nextDog = dogs.find((d) => d.id === nextId)
+                    if (kind === 'weight' && nextDog) {
+                      setUnit(nextDog.weightUnit ?? 'lbs')
+                      setAmount(nextDog.weight ? String(nextDog.weight) : '')
+                    }
                   }}
                 >
-                  <Plus size={16} />
-                  Create new {kindLabel(kind).toLowerCase()}
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-3 rounded-2xl border border-amber-100 bg-[#FBF9F5] p-3">
-                {kind === 'food' ? (
+                  {dogs.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+
+            {kind === 'food' ? (
+              !creating ? (
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search
+                      size={16}
+                      className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <input
+                      className={`${fieldClassName} !mt-0 pl-10`}
+                      placeholder="Search foods…"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      aria-label="Search catalog"
+                    />
+                  </div>
+                  <ul className="max-h-40 space-y-1 overflow-y-auto">
+                    {candidates.map((item) => {
+                      const active = item.id === selectedId
+                      return (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            onClick={() => pickItem(item)}
+                            className={`flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm transition-colors ${
+                              active
+                                ? 'bg-amber-50 font-semibold text-[#F59E0B] ring-1 ring-amber-200'
+                                : 'bg-[#FBF9F5] text-slate-700 hover:bg-amber-50/80'
+                            }`}
+                          >
+                            <span className="truncate">{foodListLabel(item)}</span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <Button
+                    variant="secondary"
+                    className="w-full !h-11"
+                    onClick={() => {
+                      setCreating(true)
+                      setSelectedId(null)
+                      setCreateForm(emptyCreate('food', query.trim()))
+                    }}
+                  >
+                    <Plus size={16} />
+                    Create new food
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3 rounded-2xl border border-amber-100 bg-[#FBF9F5] p-3">
                   <FoodCreateFields
                     form={createForm}
                     onChange={setCreateForm}
                     idPrefix="ql-food"
                     showServing={false}
                   />
-                ) : (
-                  <>
-                    <Field label="Name" htmlFor="ql-name">
-                      <input
-                        id="ql-name"
-                        className={fieldClassName}
-                        value={createForm.name}
-                        onChange={(e) =>
-                          setCreateForm((f) => ({ ...f, name: e.target.value }))
-                        }
-                        autoFocus
-                      />
-                    </Field>
-                    <Field label="Brand (optional)" htmlFor="ql-brand">
-                      <input
-                        id="ql-brand"
-                        className={fieldClassName}
-                        value={createForm.brand}
-                        onChange={(e) =>
-                          setCreateForm((f) => ({ ...f, brand: e.target.value }))
-                        }
-                      />
-                    </Field>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Field label="Default amount" htmlFor="ql-amt">
-                        <input
-                          id="ql-amt"
-                          type="number"
-                          inputMode="decimal"
-                          className={fieldClassName}
-                          value={createForm.defaultAmount}
-                          onChange={(e) =>
-                            setCreateForm((f) => ({
-                              ...f,
-                              defaultAmount: e.target.value,
-                            }))
-                          }
-                        />
-                      </Field>
-                      <Field label="Unit" htmlFor="ql-unit">
-                        <input
-                          id="ql-unit"
-                          className={fieldClassName}
-                          value={createForm.unit}
-                          onChange={(e) =>
-                            setCreateForm((f) => ({ ...f, unit: e.target.value }))
-                          }
-                        />
-                      </Field>
-                    </div>
-                  </>
-                )}
-                <Button
-                  variant="ghost"
-                  className="!h-10 w-full"
-                  onClick={() => setCreating(false)}
+                  <Button
+                    variant="ghost"
+                    className="!h-10 w-full"
+                    onClick={() => setCreating(false)}
+                  >
+                    Back to search
+                  </Button>
+                </div>
+              )
+            ) : null}
+
+            {kind === 'activity' ? (
+              <Field label="What kind?">
+                <SegmentedControl
+                  value={activityType}
+                  onChange={setActivityType}
+                  options={ACTIVITY_OPTIONS}
+                  ariaLabel="Activity type"
+                />
+              </Field>
+            ) : null}
+
+            {kind === 'activity' ? (
+              <Field label="Duration (minutes)" htmlFor="ql-log-amt">
+                <input
+                  id="ql-log-amt"
+                  type="number"
+                  inputMode="decimal"
+                  className={fieldClassName}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="30"
+                />
+              </Field>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <Field
+                  label={kind === 'weight' ? 'Weight' : 'Amount'}
+                  htmlFor="ql-log-amt"
                 >
-                  Back to search
-                </Button>
+                  <input
+                    id="ql-log-amt"
+                    type="number"
+                    inputMode="decimal"
+                    className={fieldClassName}
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder={selected?.defaultAmount?.toString() ?? ''}
+                  />
+                </Field>
+                <Field label="Unit" htmlFor="ql-log-unit">
+                  <input
+                    id="ql-log-unit"
+                    className={fieldClassName}
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    placeholder={
+                      kind === 'weight'
+                        ? dog?.weightUnit || 'lbs'
+                        : selected?.unit || ''
+                    }
+                  />
+                </Field>
               </div>
             )}
-          </>
-        ) : null}
 
-        <div className="grid grid-cols-2 gap-2">
-          <Field
-            label={kind === 'weight' ? 'Weight' : 'Amount'}
-            htmlFor="ql-log-amt"
-          >
-            <input
-              id="ql-log-amt"
-              type="number"
-              inputMode="decimal"
-              className={fieldClassName}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder={selected?.defaultAmount?.toString() ?? ''}
-            />
-          </Field>
-          <Field label="Unit" htmlFor="ql-log-unit">
-            <input
-              id="ql-log-unit"
-              className={fieldClassName}
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-              placeholder={
-                kind === 'weight' ? dog?.weightUnit || 'lbs' : selected?.unit || ''
+            <Field
+              label={
+                kind === 'activity' && activityType === 'other'
+                  ? 'What did you do?'
+                  : 'Note (optional)'
               }
-            />
-          </Field>
-        </div>
+              htmlFor="ql-note"
+            >
+              <input
+                id="ql-note"
+                className={fieldClassName}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={
+                  kind === 'activity' && activityType === 'other'
+                    ? 'Fetch, hike, swim…'
+                    : ''
+                }
+              />
+            </Field>
+          </div>
 
-        <Field label="Note (optional)" htmlFor="ql-note">
-          <input
-            id="ql-note"
-            className={fieldClassName}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </Field>
-      </div>
-
-      <div className="mt-4 flex gap-2">
-        <Button variant="secondary" className="flex-1" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button className="flex-1" disabled={!canSave} onClick={handleSave}>
-          Save log
-        </Button>
-      </div>
+          <div className="mt-4 flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button className="flex-1" disabled={!canSave} onClick={handleSave}>
+              Save log
+            </Button>
+          </div>
+        </>
+      )}
     </Modal>
   )
 }

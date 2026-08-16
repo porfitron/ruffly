@@ -8,11 +8,40 @@ export function startOfLocalDay(date = new Date()) {
   return d
 }
 
+export function addLocalDays(date, delta) {
+  const d = startOfLocalDay(date)
+  d.setDate(d.getDate() + delta)
+  return d
+}
+
 export function isSameLocalDay(isoOrDate, day = new Date()) {
   if (!isoOrDate) return false
   const a = startOfLocalDay(new Date(isoOrDate))
   const b = startOfLocalDay(day)
   return a.getTime() === b.getTime()
+}
+
+/** "Today" on the current local day, otherwise MM/DD/YY. */
+export function formatTodayHeading(day = new Date(), now = new Date()) {
+  if (isSameLocalDay(day, now)) return 'Today'
+  const d = startOfLocalDay(day)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const yy = String(d.getFullYear()).slice(-2)
+  return `${mm}/${dd}/${yy}`
+}
+
+/** Stamp a log on `day`, keeping the current clock time. */
+export function isoTimestampOnDay(day, now = new Date()) {
+  if (isSameLocalDay(day, now)) return now.toISOString()
+  const d = startOfLocalDay(day)
+  d.setHours(
+    now.getHours(),
+    now.getMinutes(),
+    now.getSeconds(),
+    now.getMilliseconds(),
+  )
+  return d.toISOString()
 }
 
 export function logsForDogOnDay(logs, dogId, day = new Date()) {
@@ -94,7 +123,7 @@ export function isMealSlot(slot) {
   return MEAL_SLOTS.has(String(slot ?? '').toLowerCase())
 }
 
-const KIND_ORDER = { food: 0, med: 1, supplement: 2, weight: 3 }
+const KIND_ORDER = { food: 0, med: 1, supplement: 2, weight: 3, activity: 4 }
 
 function sortMealItems(a, b) {
   const kind = (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9)
@@ -104,18 +133,45 @@ function sortMealItems(a, b) {
   })
 }
 
-/** Stable key for persisting Today row order (meals + planned items). */
+const QUICK_LOG_KINDS = new Set(['food', 'weight', 'activity'])
+
+/** Stable key for persisting Today row order (meals, planned items, + logs). */
 export function todayRowKey(row) {
   if (!row) return null
   if (row.type === 'meal') return `meal:${String(row.slot).toLowerCase()}`
   const task = row.task
-  if (!task || task.oneTime || !task.menuItemId) return null
+  if (!task) return null
+  if (task.oneTime && QUICK_LOG_KINDS.has(task.kind)) {
+    return `extra:${task.doneLogId || task.id}`
+  }
+  if (task.oneTime || !task.menuItemId) return null
   return `item:${task.menuItemId}`
 }
 
 export function isTodayDailyRow(row) {
   if (row?.type !== 'item' || !row.task || row.task.oneTime) return false
   return String(row.task.slot ?? 'daily').toLowerCase() === 'daily'
+}
+
+export function isTodayQuickLogRow(row) {
+  return (
+    row?.type === 'item' &&
+    Boolean(row.task?.oneTime) &&
+    QUICK_LOG_KINDS.has(row.task?.kind)
+  )
+}
+
+export function todayRowIsDone(row) {
+  if (!row) return false
+  return row.type === 'meal' ? Boolean(row.done) : Boolean(row.task?.done)
+}
+
+/** New + logs sit just above the first completed row until the user drags. */
+function insertQuickLogsAboveCompleted(baseRows, extras) {
+  if (!extras.length) return [...baseRows]
+  const idx = baseRows.findIndex(todayRowIsDone)
+  if (idx < 0) return [...baseRows, ...extras]
+  return [...baseRows.slice(0, idx), ...extras, ...baseRows.slice(idx)]
 }
 
 /** Apply a saved Today order; new rows stay in slot order after known ones. */
@@ -127,22 +183,26 @@ export function applyTodayRowOrder(rows, todayRowOrder) {
     else movable.push(row)
   }
 
-  if (!Array.isArray(todayRowOrder) || todayRowOrder.length === 0) {
-    return [...movable, ...pinned]
-  }
-
   const byKey = new Map()
   for (const row of movable) byKey.set(todayRowKey(row), row)
 
-  const ordered = []
-  for (const key of todayRowOrder) {
-    const row = byKey.get(key)
-    if (!row) continue
-    ordered.push(row)
-    byKey.delete(key)
+  const known = []
+  if (Array.isArray(todayRowOrder) && todayRowOrder.length > 0) {
+    for (const key of todayRowOrder) {
+      const row = byKey.get(key)
+      if (!row) continue
+      known.push(row)
+      byKey.delete(key)
+    }
   }
 
-  return [...ordered, ...byKey.values(), ...pinned]
+  const leftovers = [...byKey.values()]
+  const leftoverQuickLogs = leftovers.filter(isTodayQuickLogRow)
+  const leftoverOther = leftovers.filter((row) => !isTodayQuickLogRow(row))
+  const base = known.length > 0 ? [...known, ...leftoverOther] : leftoverOther
+  const ordered = insertQuickLogsAboveCompleted(base, leftoverQuickLogs)
+
+  return [...ordered, ...pinned]
 }
 
 /**
@@ -226,12 +286,14 @@ function claimLogsForMenuItems(menuItems, catalog, todayLogs) {
 }
 
 /** Today-only row from a log that is not on the dog’s planned menu. */
-function extraTaskFromLog(dog, log, careItem) {
+function extraTaskFromLog(dog, log, careItem, day = new Date()) {
   const kind = log.kind || careItem?.kind || 'food'
   const name =
     kind === 'weight'
       ? 'Weight'
-      : careItem?.formula || careItem?.name || log.note?.trim() || kindLabel(kind)
+      : kind === 'activity'
+        ? log.label || log.note?.trim() || 'Activity'
+        : careItem?.formula || careItem?.name || log.note?.trim() || kindLabel(kind)
 
   return {
     id: `${dog.id}:extra:${log.id}`,
@@ -245,7 +307,7 @@ function extraTaskFromLog(dog, log, careItem) {
     brand: careItem?.brand,
     flavor: careItem?.flavor,
     slot: 'extra',
-    slotLabel: formatSlotLabel('extra'),
+    slotLabel: isSameLocalDay(day) ? formatSlotLabel('extra') : 'Extra',
     amount: log.amount,
     unit: log.unit,
     done: true,
@@ -308,7 +370,7 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
   })
   for (const log of extras) {
     const careItem = log.careItemId ? byId.get(log.careItemId) : undefined
-    tasks.push(extraTaskFromLog(dog, log, careItem))
+    tasks.push(extraTaskFromLog(dog, log, careItem, day))
   }
 
   tasks.sort((a, b) => slotSortKey(a.slot) - slotSortKey(b.slot))
@@ -361,5 +423,6 @@ export function kindLabel(kind) {
   if (kind === 'med') return 'Med'
   if (kind === 'supplement') return 'Supplement'
   if (kind === 'weight') return 'Weight'
+  if (kind === 'activity') return 'Activity'
   return 'Food'
 }
