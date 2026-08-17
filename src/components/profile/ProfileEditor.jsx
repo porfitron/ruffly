@@ -91,6 +91,7 @@ export default function ProfileEditor({
   }, [editingDog?.id, addingNew])
 
   const preview = previewFromForm(form)
+  const isNew = addingNew || !editingDog
   const manualTarget = Number(form.manualTargetKcal)
   const hasManualTarget =
     form.calorieMode !== 'manual' ||
@@ -99,7 +100,7 @@ export default function ProfileEditor({
     form.name.trim().length > 0 &&
     Number(form.weight) > 0 &&
     Number.isFinite(Number(form.weight)) &&
-    hasManualTarget
+    (isNew || hasManualTarget)
 
   function update(field, value) {
     setForm((prev) => {
@@ -127,7 +128,6 @@ export default function ProfileEditor({
     if (!canSave) return
 
     const isManual = form.calorieMode === 'manual'
-    const isNew = addingNew || !editingDog
     const dogId = isNew ? createId('dog') : editingDog.id
 
     dispatch({
@@ -273,7 +273,7 @@ export default function ProfileEditor({
               value={form.manualTargetKcal}
               onChange={(e) => update('manualTargetKcal', e.target.value)}
               placeholder="e.g. 850"
-              required
+              required={!isNew}
             />
           </Field>
         ) : (

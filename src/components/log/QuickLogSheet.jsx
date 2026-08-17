@@ -4,6 +4,7 @@ import Modal from '../ui/Modal'
 import Button from '../ui/Button'
 import { Field, SegmentedControl, fieldClassName } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
+import { isDogAway } from '../../utils/dogs'
 import { estimateFoodKcal, kindLabel } from '../../utils/todayCare'
 import FoodCreateFields, {
   emptyCreate,
@@ -33,7 +34,50 @@ const SLOT_OPTIONS = [
   { value: 'as_needed', label: 'As needed' },
 ]
 
-/** Quick log sheet — choose Food / Weight / Activity, then ADD_LOG. */
+function preferredHomeDogId(homeDogs, preferredId) {
+  if (preferredId && homeDogs.some((d) => d.id === preferredId)) {
+    return preferredId
+  }
+  return homeDogs[0]?.id ?? null
+}
+
+function isCatalogKind(kind) {
+  return kind === 'food' || kind === 'med' || kind === 'supplement'
+}
+
+function catalogItemLabel(item) {
+  if (!item) return 'Untitled'
+  if (item.kind === 'food') return foodListLabel(item)
+  const name = item.name?.trim() || 'Untitled'
+  const brand = item.brand?.trim()
+  return brand ? `${brand} · ${name}` : name
+}
+
+function nonFoodCreateIsValid(form) {
+  return Boolean(form?.name?.trim())
+}
+
+function buildNonFoodCareItem(form, id, kind, amount, unit) {
+  const defaultAmount =
+    amount !== ''
+      ? Number(amount)
+      : form.defaultAmount
+        ? Number(form.defaultAmount)
+        : null
+  return {
+    id,
+    kind,
+    name: form.name.trim(),
+    brand: (form.brand ?? '').trim(),
+    notes: '',
+    defaultAmount: Number.isFinite(defaultAmount) ? defaultAmount : null,
+    unit: (unit || form.unit || '').trim() || 'tablet',
+    kcalPerUnit: null,
+    productUrl: '',
+  }
+}
+
+/** Quick log sheet — choose Food / Med / Supplement / Weight / Activity, then ADD_LOG. */
 export default function QuickLogSheet({
   open,
   onClose,
@@ -42,9 +86,15 @@ export default function QuickLogSheet({
   initialKind = null,
 }) {
   const { dogs, activeDogId, catalog, dispatch, createId } = useApp()
+  const homeDogs = useMemo(
+    () => (dogs ?? []).filter((d) => !isDogAway(d)),
+    [dogs],
+  )
   const skipChoice = Boolean(initialKind)
   const [step, setStep] = useState(skipChoice ? 'form' : 'choose')
-  const [dogId, setDogId] = useState(initialDogId || activeDogId || dogs[0]?.id)
+  const [dogId, setDogId] = useState(
+    () => preferredHomeDogId(homeDogs, initialDogId || activeDogId),
+  )
   const [kind, setKind] = useState(initialKind || 'food')
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(null)
@@ -57,18 +107,26 @@ export default function QuickLogSheet({
     emptyCreate(initialKind || 'food'),
   )
 
-  const dog = dogs.find((d) => d.id === dogId) ?? dogs[0]
+  const dog = homeDogs.find((d) => d.id === dogId) ?? homeDogs[0]
   const choosing = step === 'choose' && !skipChoice
 
   useEffect(() => {
     if (!open) return
-    setDogId(initialDogId || activeDogId || dogs[0]?.id)
+    setDogId(preferredHomeDogId(homeDogs, initialDogId || activeDogId))
     setKind(initialKind || 'food')
     setStep(initialKind ? 'form' : 'choose')
     setQuery('')
     setSelectedId(null)
     setAmount('')
-    setUnit(initialKind === 'weight' ? 'lbs' : initialKind === 'activity' ? 'min' : '')
+    setUnit(
+      initialKind === 'weight'
+        ? 'lbs'
+        : initialKind === 'activity'
+          ? 'min'
+          : initialKind === 'med' || initialKind === 'supplement'
+            ? 'tablet'
+            : '',
+    )
     setNote('')
     setActivityType('walk')
     setCreating(false)
@@ -78,10 +136,10 @@ export default function QuickLogSheet({
   }, [open])
 
   const candidates = useMemo(() => {
-    if (kind !== 'food') return []
+    if (!isCatalogKind(kind)) return []
     const q = query.trim().toLowerCase()
     return (catalog ?? [])
-      .filter((item) => item.kind === 'food')
+      .filter((item) => item.kind === kind)
       .filter((item) => {
         if (!q) return true
         const hay = [
@@ -89,6 +147,7 @@ export default function QuickLogSheet({
           item.formula,
           item.brand,
           item.flavor,
+          item.notes,
         ]
           .filter(Boolean)
           .join(' ')
@@ -124,6 +183,9 @@ export default function QuickLogSheet({
       setAmount(dog?.weight ? String(dog.weight) : '')
     } else if (next === 'activity') {
       setUnit('min')
+      setAmount('')
+    } else if (next === 'med' || next === 'supplement') {
+      setUnit('tablet')
       setAmount('')
     } else {
       setUnit('')
@@ -195,8 +257,21 @@ export default function QuickLogSheet({
 
     let careItem = selected
     if (creating) {
-      if (!foodCreateIsValid(createForm)) return
-      careItem = buildFoodCareItem(createForm, createId('item'))
+      if (kind === 'food') {
+        if (!foodCreateIsValid(createForm)) return
+        careItem = buildFoodCareItem(createForm, createId('item'))
+      } else if (kind === 'med' || kind === 'supplement') {
+        if (!nonFoodCreateIsValid(createForm)) return
+        careItem = buildNonFoodCareItem(
+          createForm,
+          createId('item'),
+          kind,
+          amount,
+          unit,
+        )
+      } else {
+        return
+      }
       dispatch({ type: 'UPSERT_CARE_ITEM', payload: careItem })
     }
 
@@ -233,16 +308,30 @@ export default function QuickLogSheet({
         ? Number(amount) > 0 &&
           (activityType !== 'other' || Boolean(note.trim()))
         : creating
-          ? foodCreateIsValid(createForm)
+          ? kind === 'food'
+            ? foodCreateIsValid(createForm)
+            : nonFoodCreateIsValid(createForm)
           : Boolean(selected))
 
-  const modalTitle = choosing
-    ? 'What to log?'
-    : `Log ${kindLabel(kind).toLowerCase()}`
+  const modalTitle = homeDogs.length === 0
+    ? 'Everyone’s away'
+    : choosing
+      ? 'What to log?'
+      : `Log ${kindLabel(kind).toLowerCase()}`
 
   return (
     <Modal open={open} title={modalTitle} onClose={onClose}>
-      {choosing ? (
+      {homeDogs.length === 0 ? (
+        <>
+          <p className="text-sm text-slate-500">
+            Paused dogs skip logging. Mark a pup as home from Pack when
+            they’re back with you.
+          </p>
+          <Button className="mt-4 w-full" onClick={onClose}>
+            Close
+          </Button>
+        </>
+      ) : choosing ? (
         <LogChoice onPick={handlePickKind} />
       ) : (
         <>
@@ -258,7 +347,7 @@ export default function QuickLogSheet({
               </button>
             ) : null}
 
-            {dogs.length > 1 ? (
+            {homeDogs.length > 1 ? (
               <Field label="Dog">
                 <select
                   className={fieldClassName}
@@ -266,14 +355,14 @@ export default function QuickLogSheet({
                   onChange={(e) => {
                     const nextId = e.target.value
                     setDogId(nextId)
-                    const nextDog = dogs.find((d) => d.id === nextId)
+                    const nextDog = homeDogs.find((d) => d.id === nextId)
                     if (kind === 'weight' && nextDog) {
                       setUnit(nextDog.weightUnit ?? 'lbs')
                       setAmount(nextDog.weight ? String(nextDog.weight) : '')
                     }
                   }}
                 >
-                  {dogs.map((d) => (
+                  {homeDogs.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name}
                     </option>
@@ -282,7 +371,7 @@ export default function QuickLogSheet({
               </Field>
             ) : null}
 
-            {kind === 'food' ? (
+            {isCatalogKind(kind) ? (
               !creating ? (
                 <div className="space-y-2">
                   <div className="relative">
@@ -292,10 +381,10 @@ export default function QuickLogSheet({
                     />
                     <input
                       className={`${fieldClassName} !mt-0 pl-10`}
-                      placeholder="Search foods…"
+                      placeholder={`Search ${kindLabel(kind).toLowerCase()}s…`}
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      aria-label="Search catalog"
+                      aria-label={`Search ${kindLabel(kind).toLowerCase()}s`}
                     />
                   </div>
                   <ul className="max-h-40 space-y-1 overflow-y-auto">
@@ -312,7 +401,9 @@ export default function QuickLogSheet({
                                 : 'bg-[#FBF9F5] text-slate-700 hover:bg-amber-50/80'
                             }`}
                           >
-                            <span className="truncate">{foodListLabel(item)}</span>
+                            <span className="truncate">
+                              {catalogItemLabel(item)}
+                            </span>
                           </button>
                         </li>
                       )
@@ -324,21 +415,56 @@ export default function QuickLogSheet({
                     onClick={() => {
                       setCreating(true)
                       setSelectedId(null)
-                      setCreateForm(emptyCreate('food', query.trim()))
+                      setCreateForm(emptyCreate(kind, query.trim()))
                     }}
                   >
                     <Plus size={16} />
-                    Create new food
+                    Create new {kindLabel(kind).toLowerCase()}
                   </Button>
                 </div>
               ) : (
                 <div className="space-y-3 rounded-2xl border border-amber-100 bg-[#FBF9F5] p-3">
-                  <FoodCreateFields
-                    form={createForm}
-                    onChange={setCreateForm}
-                    idPrefix="ql-food"
-                    showServing={false}
-                  />
+                  {kind === 'food' ? (
+                    <FoodCreateFields
+                      form={createForm}
+                      onChange={setCreateForm}
+                      idPrefix="ql-food"
+                      showServing={false}
+                    />
+                  ) : (
+                    <>
+                      <Field label="Name" htmlFor="ql-create-name">
+                        <input
+                          id="ql-create-name"
+                          className={fieldClassName}
+                          value={createForm.name ?? ''}
+                          onChange={(e) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              name: e.target.value,
+                            }))
+                          }
+                          autoFocus
+                        />
+                      </Field>
+                      <Field
+                        label="Brand (optional)"
+                        htmlFor="ql-create-brand"
+                      >
+                        <input
+                          id="ql-create-brand"
+                          className={fieldClassName}
+                          value={createForm.brand ?? ''}
+                          onChange={(e) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              brand: e.target.value,
+                            }))
+                          }
+                        />
+                      </Field>
+                    </>
+                  )}
                   <Button
                     variant="ghost"
                     className="!h-10 w-full"

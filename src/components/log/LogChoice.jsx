@@ -1,4 +1,4 @@
-import { Footprints, Scale, Utensils } from 'lucide-react'
+import { Footprints, Leaf, Pill, Scale, Utensils } from 'lucide-react'
 
 const CHOICES = [
   {
@@ -6,6 +6,18 @@ const CHOICES = [
     label: 'Food',
     hint: 'Treat, extra meal, or snack',
     icon: Utensils,
+  },
+  {
+    value: 'med',
+    label: 'Medication',
+    hint: 'Extra dose or as-needed med',
+    icon: Pill,
+  },
+  {
+    value: 'supplement',
+    label: 'Supplement',
+    hint: 'Extra dose or as-needed supp',
+    icon: Leaf,
   },
   {
     value: 'weight',
@@ -21,7 +33,7 @@ const CHOICES = [
   },
 ]
 
-/** First step after tapping + — pick Food, Weight, or Activity. */
+/** First step after tapping + — pick Food, Med, Supplement, Weight, or Activity. */
 export default function LogChoice({ onPick }) {
   return (
     <ul className="space-y-2">
