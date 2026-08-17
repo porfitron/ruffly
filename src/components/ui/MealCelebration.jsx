@@ -20,6 +20,11 @@ const THEMES = {
     label: 'New pup saved',
     wash: 'bg-gradient-to-b from-rose-200/90 via-pink-200/80 to-orange-100/85',
   },
+  allDone: {
+    emoji: '👅',
+    label: 'All done for today',
+    wash: 'bg-gradient-to-b from-rose-200/90 via-pink-200/80 to-orange-100/85',
+  },
   play: {
     emoji: '🎾',
     label: 'Play logged',
@@ -44,7 +49,7 @@ function makeBursts() {
   })
 }
 
-/** Full-screen emoji burst for meal check-off and new-pup save. */
+/** Full-screen emoji burst for meal check-off, all-done, and new-pup save. */
 export default function MealCelebration({ playId, theme = 'sun', onDone }) {
   const onDoneRef = useRef(onDone)
   onDoneRef.current = onDone

@@ -19,6 +19,7 @@ import MealCelebration from '../ui/MealCelebration'
 import DogAvatar from '../profile/DogAvatar'
 import { useApp } from '../../context/AppContext'
 import { useHoldReorder } from '../../hooks/useHoldReorder'
+import { getCategoryLabel } from '../../utils/calculations'
 import { isDogAway } from '../../utils/dogs'
 import {
   formatPackUpdateDate,
@@ -48,28 +49,49 @@ function celebrationThemeForSlot(slot) {
   return SLOT_CELEBRATIONS[String(slot ?? '').toLowerCase()] ?? null
 }
 
-/** Theme to play when logging this item finishes its meal. */
+function packDueCount(groups) {
+  return groups.reduce((sum, g) => sum + g.dueCount, 0)
+}
+
+function rowCompletedByTask(row, task) {
+  if (row.type === 'meal') {
+    if (row.done) return false
+    if (!row.items.some((item) => item.id === task.id)) return false
+    return row.items.every((item) => item.id === task.id || item.done)
+  }
+  return Boolean(row.task && !row.task.done && row.task.id === task.id)
+}
+
+/** Theme to play when logging this item; finishing the day beats meal sun/moon. */
 function celebrationWhenCompleting(groups, task) {
-  const theme = celebrationThemeForSlot(task.slot)
-  if (!theme || task.done) return null
+  if (task.done) return null
+  let mealTheme = null
+  let completesDueRow = false
   for (const group of groups) {
     for (const row of group.rows) {
-      if (row.type !== 'meal' || celebrationThemeForSlot(row.slot) !== theme) {
-        continue
+      if (!rowCompletedByTask(row, task)) continue
+      completesDueRow = true
+      if (row.type === 'meal') {
+        mealTheme = celebrationThemeForSlot(row.slot)
       }
-      if (!row.items.some((item) => item.id === task.id)) continue
-      const completes = row.items.every(
-        (item) => item.id === task.id || item.done,
-      )
-      return completes ? theme : null
     }
   }
-  return null
+  if (!completesDueRow) return null
+  if (packDueCount(groups) === 1) return 'allDone'
+  return mealTheme
+}
+
+function celebrationWhenCompletingMeal(groups, meal) {
+  if (meal.done) return null
+  if (packDueCount(groups) === 1) return 'allDone'
+  return celebrationThemeForSlot(meal.slot)
 }
 
 function taskTitle(task) {
-  if (task.kind === 'food' && (task.brand || task.flavor)) {
-    return [task.brand, task.name, task.flavor].filter(Boolean).join(' · ')
+  if (task.kind === 'food') {
+    return [getCategoryLabel(task.category), task.flavor || task.name]
+      .filter(Boolean)
+      .join(' · ')
   }
   return task.name
 }
@@ -390,11 +412,17 @@ function DayHeading({
   onNext,
   canGoForward,
   subtitle,
+  subtitleLabel,
   shareButton = null,
 }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 px-0.5">
-      <p className="truncate text-sm leading-5 text-slate-500">{subtitle}</p>
+      <p
+        className="truncate text-sm leading-5 tabular-nums text-slate-500"
+        aria-label={subtitleLabel}
+      >
+        {subtitle}
+      </p>
       <div className="flex items-center">
         <button
           type="button"
@@ -453,6 +481,8 @@ export default function TodayView({
   )
   const homeDogs = dogs.filter((dog) => !isDogAway(dog))
   const totalDue = groups.reduce((sum, g) => sum + g.dueCount, 0)
+  const totalDone = groups.reduce((sum, g) => sum + g.doneCount, 0)
+  const totalRows = groups.reduce((sum, g) => sum + g.rows.length, 0)
   const totalTasks = groups.reduce((sum, g) => sum + g.tasks.length, 0)
 
   function shiftDay(delta) {
@@ -467,12 +497,16 @@ export default function TodayView({
         ? 'Nothing on the menu yet'
         : 'No logs this day'
       : totalDue === 0
-        ? viewingToday
-          ? 'You’re all caught up'
-          : 'All caught up that day'
-        : viewingToday
-          ? `${totalDue} care item${totalDue === 1 ? '' : 's'} left`
-          : `${totalDue} not logged`
+        ? '😊'
+        : `${totalDone} of ${totalRows}`
+  const headingSubtitleLabel =
+    totalTasks > 0 && totalDue === 0
+      ? viewingToday
+        ? 'You’re all caught up'
+        : 'All caught up that day'
+      : totalTasks > 0
+        ? `${totalDone} of ${totalRows} care items done`
+        : undefined
   const playCelebration = useCallback((theme) => {
     if (!theme) return
     setCelebration({ theme, playId: Date.now() })
@@ -568,8 +602,9 @@ export default function TodayView({
   }
 
   function handleMealDone(meal) {
-    const theme =
-      viewingToday && !meal.done ? celebrationThemeForSlot(meal.slot) : null
+    const theme = viewingToday
+      ? celebrationWhenCompletingMeal(groups, meal)
+      : null
     for (const item of meal.items) {
       if (!item.done) logTask(item)
     }
@@ -633,6 +668,7 @@ export default function TodayView({
           onNext={() => shiftDay(1)}
           canGoForward={!viewingToday}
           subtitle={headingSubtitle}
+          subtitleLabel={headingSubtitleLabel}
         />
         <Card className="space-y-3 text-center">
           <h2 className="text-lg font-bold text-slate-800">
@@ -697,15 +733,16 @@ export default function TodayView({
           onNext={() => shiftDay(1)}
           canGoForward={!viewingToday}
           subtitle={headingSubtitle}
+          subtitleLabel={headingSubtitleLabel}
           shareButton={
             <Button
               variant="ghost"
-              className="share-hide !h-10 shrink-0 whitespace-nowrap px-3 text-[#F59E0B]"
+              className="share-hide !h-10 !w-10 shrink-0 !px-0 text-[#F59E0B]"
               onClick={handleShareLog}
               disabled={sharing}
+              aria-label="Share log"
               aria-busy={sharing}
             >
-              Share Log
               <Share size={18} />
             </Button>
           }
@@ -767,7 +804,7 @@ export default function TodayView({
                       className="share-hide shrink-0 text-xs font-semibold text-[#F59E0B]"
                       onClick={() => onEditMenu?.(dog.id)}
                     >
-                      {hasMenu ? 'Edit routine' : 'Add menu'}
+                      {hasMenu ? 'Edit routine' : 'Add routine'}
                     </button>
                   </div>
                   <p className="text-xs text-slate-400">
