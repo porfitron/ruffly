@@ -51,10 +51,25 @@ function captureOptions() {
   }
 }
 
+function needsBlankFrameWarmup() {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  // Android Chrome is slow to screenshot; skip the extra pass so share can
+  // still run inside the ~5s user-activation window.
+  if (/Android/i.test(ua)) return false
+  if (/iPad|iPhone|iPod/.test(ua)) return true
+  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) {
+    return true
+  }
+  return /Safari/i.test(ua) && !/Chrome|Chromium|Edg/i.test(ua)
+}
+
 async function captureNodePngDataUrl(node) {
   const options = captureOptions()
-  // Safari often paints a blank first frame.
-  await domToPng(node, options)
+  // Safari/iOS WebKit often paints a blank first frame.
+  if (needsBlankFrameWarmup()) {
+    await domToPng(node, options)
+  }
   const dataUrl = await domToPng(node, options)
   if (!dataUrl || dataUrl.length < 1000) {
     throw new Error('Couldn’t create a photo of the log. Try again.')
@@ -105,23 +120,62 @@ function downloadFiles(files) {
   })
 }
 
-async function shareFiles(files, { title, text }) {
+function canShareFiles(files) {
   try {
-    if (navigator.canShare?.({ files })) {
+    return Boolean(navigator.canShare?.({ files }))
+  } catch {
+    return false
+  }
+}
+
+function hasTransientActivation() {
+  if (!navigator.userActivation) return true
+  return navigator.userActivation.isActive
+}
+
+/**
+ * Android Chrome only allows navigator.share() while a tap is still “active”
+ * (~5s). Screenshot capture usually burns that window, so the first attempt
+ * may return 'needs-gesture' and the UI should offer a second Share tap.
+ */
+async function shareFiles(
+  files,
+  { title, text },
+  { allowGestureFallback = true } = {},
+) {
+  if (canShareFiles(files) || typeof navigator.share === 'function') {
+    if (allowGestureFallback && !hasTransientActivation()) {
+      return 'needs-gesture'
+    }
+    try {
       await navigator.share({ files, title, text })
       return 'shared'
+    } catch (err) {
+      if (err?.name === 'AbortError') return 'cancelled'
+      if (allowGestureFallback && err?.name === 'NotAllowedError') {
+        return 'needs-gesture'
+      }
     }
-    if (typeof navigator.share === 'function') {
-      await navigator.share({ files, title, text })
-      return 'shared'
-    }
-  } catch (err) {
-    if (err?.name === 'AbortError') return 'cancelled'
-    if (err?.name === 'NotAllowedError') throw err
   }
 
   downloadFiles(files)
   return 'downloaded'
+}
+
+function packSharePayload(captures, files, { totalDue, day }) {
+  return {
+    files,
+    title:
+      captures.length === 1
+        ? `${captures[0].name || 'Log'} · Ruffly`
+        : 'Ruffly pack log',
+    text: packUpdateCaption(totalDue, day),
+  }
+}
+
+/** Share files already captured. Call from a click handler with no awaits first. */
+export async function sharePreparedLog({ files, title, text }) {
+  return shareFiles(files, { title, text }, { allowGestureFallback: false })
 }
 
 /** Capture each dog card as its own PNG and open the system share sheet. */
@@ -144,12 +198,7 @@ export async function shareTodayScreenshots(
     )
   }
 
-  const title =
-    captures.length === 1
-      ? `${captures[0].name || 'Log'} · Ruffly`
-      : 'Ruffly pack log'
-  return shareFiles(files, {
-    title,
-    text: packUpdateCaption(totalDue, day),
-  })
+  const payload = packSharePayload(captures, files, { totalDue, day })
+  const status = await shareFiles(payload.files, payload)
+  return { status, ...payload }
 }

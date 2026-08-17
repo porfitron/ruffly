@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
+import Modal from '../ui/Modal'
 import BrandMark from '../ui/BrandMark'
 import MealCelebration from '../ui/MealCelebration'
 import DogAvatar from '../profile/DogAvatar'
@@ -21,6 +22,7 @@ import { useHoldReorder } from '../../hooks/useHoldReorder'
 import { isDogAway } from '../../utils/dogs'
 import {
   formatPackUpdateDate,
+  sharePreparedLog,
   shareTodayScreenshots,
 } from '../../utils/shareToday'
 import {
@@ -440,6 +442,7 @@ export default function TodayView({
   const [celebration, setCelebration] = useState(null)
   const [sharing, setSharing] = useState(false)
   const [shareError, setShareError] = useState('')
+  const [pendingShare, setPendingShare] = useState(null)
   const viewingToday = isSameLocalDay(viewingDay)
   const groups = buildPackTodayTasks(
     dogs,
@@ -484,6 +487,7 @@ export default function TodayView({
   async function handleShareLog() {
     if (sharing) return
     setShareError('')
+    setPendingShare(null)
     flushSync(() => setSharing(true))
     await new Promise((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(resolve))
@@ -495,7 +499,13 @@ export default function TodayView({
           name: dog.name,
         }))
         .filter((item) => item.node)
-      await shareTodayScreenshots(items, { totalDue, day: viewingDay })
+      const result = await shareTodayScreenshots(items, {
+        totalDue,
+        day: viewingDay,
+      })
+      if (result?.status === 'needs-gesture') {
+        setPendingShare(result)
+      }
     } catch (err) {
       if (err?.name !== 'AbortError') {
         setShareError(
@@ -505,6 +515,21 @@ export default function TodayView({
     } finally {
       setSharing(false)
     }
+  }
+
+  function handlePendingShare() {
+    const payload = pendingShare
+    if (!payload) return
+    // Call share in this tap — Android Chrome rejects share() after any await.
+    sharePreparedLog(payload)
+      .then(() => setPendingShare(null))
+      .catch((err) => {
+        if (err?.name !== 'AbortError') {
+          setShareError(
+            err?.message || 'Couldn’t share the log. Try again.',
+          )
+        }
+      })
   }
 
   function logTask(task) {
@@ -647,6 +672,20 @@ export default function TodayView({
           </p>
         </div>
       ) : null}
+
+      <Modal
+        open={Boolean(pendingShare)}
+        title="Share log"
+        onClose={() => setPendingShare(null)}
+      >
+        <p className="text-sm text-slate-500">
+          Your log photo is ready. Tap Share to open your phone’s share sheet.
+        </p>
+        <Button className="mt-4 w-full" onClick={handlePendingShare}>
+          Share
+          <Share size={18} />
+        </Button>
+      </Modal>
 
       <div
         data-sharing={sharing ? 'true' : undefined}
