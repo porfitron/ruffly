@@ -30,10 +30,13 @@ function localIsoDate(day = new Date()) {
   return `${y}-${m}-${d}`
 }
 
-function captureOptions() {
+function captureOptions({ scale } = {}) {
+  const dpr = window.devicePixelRatio || 2
   return {
     backgroundColor: CREAM,
-    scale: Math.min(2, window.devicePixelRatio || 2),
+    // Share-log cards stay at 2× to keep tall canvases inside iOS limits.
+    // Small cards (Fleamail) pass a higher scale so Messages doesn’t upscale.
+    scale: scale ?? Math.min(2, dpr),
     maximumCanvasSize: IOS_MAX_CANVAS,
     timeout: 8000,
     style: {
@@ -83,14 +86,14 @@ function waitForImages(node, ms = 2000) {
   )
 }
 
-async function captureNodePngDataUrl(node) {
+async function captureNodePngDataUrl(node, options = {}) {
   await waitForImages(node)
-  const options = captureOptions()
+  const capture = captureOptions(options)
   // Safari/iOS WebKit often paints a blank first frame.
   if (needsBlankFrameWarmup()) {
-    await domToPng(node, options)
+    await domToPng(node, capture)
   }
-  const dataUrl = await domToPng(node, options)
+  const dataUrl = await domToPng(node, capture)
   if (!dataUrl || dataUrl.length < 1000) {
     throw new Error('Couldn’t create a photo. Try again.')
   }
@@ -205,12 +208,12 @@ export async function sharePreparedLog({ files, title, text }) {
 /** Capture one node as a PNG and open the system share sheet. */
 export async function shareCardScreenshot(
   node,
-  { filename, title, text },
+  { filename, title, text, scale = 3 } = {},
 ) {
   if (!node) {
     throw new Error('Couldn’t create a photo. Try again.')
   }
-  const dataUrl = await captureNodePngDataUrl(node)
+  const dataUrl = await captureNodePngDataUrl(node, { scale })
   const file = dataUrlToFile(dataUrl, filename)
   const payload = { files: [file], title, text }
   const status = await shareFiles(payload.files, payload)

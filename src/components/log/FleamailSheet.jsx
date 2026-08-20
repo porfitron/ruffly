@@ -147,6 +147,7 @@ export default function FleamailSheet({ open, onClose }) {
     try {
       const result = await shareCardScreenshot(cardRef.current, {
         filename: fleamailFilename(dog.name),
+        scale: 3,
       })
       if (result?.status === 'needs-gesture') {
         setPendingShare(result)
