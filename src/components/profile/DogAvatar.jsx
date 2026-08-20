@@ -29,7 +29,9 @@ export default function DogAvatar({
           ? 'h-10 w-10 text-sm'
           : size === 'lg'
             ? 'h-16 w-16 text-2xl'
-            : 'h-12 w-12 text-base'
+            : size === 'xl'
+              ? 'h-20 w-20 text-3xl'
+              : 'h-12 w-12 text-base'
 
   const ringClass = ring
     ? size === 'nav'

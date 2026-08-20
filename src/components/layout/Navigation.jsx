@@ -34,7 +34,7 @@ export default function Navigation({ activeTab, onChange, onLog }) {
             type="button"
             onClick={onLog}
             className="-mt-5 flex h-14 w-14 items-center justify-center rounded-full bg-[#F59E0B] text-white shadow-lg shadow-amber-200/80 ring-4 ring-[#FBF9F5] transition hover:bg-amber-600"
-            aria-label="Log food, meds, supplements, weight, activity, or a note"
+            aria-label="Log food, meds, supplements, weight, activity, a note, or send Fleamail"
           >
             <Plus size={28} strokeWidth={2.5} />
           </button>

@@ -77,11 +77,12 @@ function buildNonFoodCareItem(form, id, kind, amount, unit) {
   }
 }
 
-/** Quick log sheet — choose Food / Med / Supplement / Weight / Activity / Note, then ADD_LOG. */
+/** Quick log sheet — choose Food / Med / Supplement / Weight / Activity / Note / Fleamail. */
 export default function QuickLogSheet({
   open,
   onClose,
   onCelebrate,
+  onFleamail,
   initialDogId = null,
   initialKind = null,
   editLog = null,
@@ -210,6 +211,10 @@ export default function QuickLogSheet({
   }
 
   function handlePickKind(next) {
+    if (next === 'fleamail') {
+      onFleamail?.()
+      return
+    }
     applyKind(next)
     setStep('form')
   }

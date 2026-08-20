@@ -1,4 +1,12 @@
-import { Footprints, Leaf, Pill, Scale, StickyNote, Utensils } from 'lucide-react'
+import {
+  Footprints,
+  Leaf,
+  MessageCircle,
+  Pill,
+  Scale,
+  StickyNote,
+  Utensils,
+} from 'lucide-react'
 
 const CHOICES = [
   {
@@ -37,9 +45,15 @@ const CHOICES = [
     hint: 'A title, time, and comment',
     icon: StickyNote,
   },
+  {
+    value: 'fleamail',
+    label: 'Send Fleamail',
+    hint: 'Dog to Parent messenger',
+    icon: MessageCircle,
+  },
 ]
 
-/** First step after tapping + — pick Food, Med, Supplement, Weight, Activity, or Note. */
+/** First step after tapping + — pick Food, Med, Supplement, Weight, Activity, Note, or Fleamail. */
 export default function LogChoice({ onPick }) {
   return (
     <ul className="space-y-2">

@@ -64,7 +64,27 @@ function needsBlankFrameWarmup() {
   return /Safari/i.test(ua) && !/Chrome|Chromium|Edg/i.test(ua)
 }
 
+function waitForImages(node, ms = 2000) {
+  if (!node) return Promise.resolve()
+  const imgs = [...node.querySelectorAll('img')]
+  return Promise.all(
+    imgs.map((img) => {
+      if (img.complete) return Promise.resolve()
+      return new Promise((resolve) => {
+        const done = () => {
+          clearTimeout(t)
+          resolve()
+        }
+        const t = setTimeout(done, ms)
+        img.addEventListener('load', done, { once: true })
+        img.addEventListener('error', done, { once: true })
+      })
+    }),
+  )
+}
+
 async function captureNodePngDataUrl(node) {
+  await waitForImages(node)
   const options = captureOptions()
   // Safari/iOS WebKit often paints a blank first frame.
   if (needsBlankFrameWarmup()) {
@@ -72,7 +92,7 @@ async function captureNodePngDataUrl(node) {
   }
   const dataUrl = await domToPng(node, options)
   if (!dataUrl || dataUrl.length < 1000) {
-    throw new Error('Couldn’t create a photo of the log. Try again.')
+    throw new Error('Couldn’t create a photo. Try again.')
   }
   return dataUrl
 }
@@ -148,7 +168,11 @@ async function shareFiles(
       return 'needs-gesture'
     }
     try {
-      await navigator.share({ files, title, text })
+      await navigator.share({
+        files,
+        ...(title ? { title } : {}),
+        ...(text ? { text } : {}),
+      })
       return 'shared'
     } catch (err) {
       if (err?.name === 'AbortError') return 'cancelled'
@@ -176,6 +200,21 @@ function packSharePayload(captures, files, { totalDue, day }) {
 /** Share files already captured. Call from a click handler with no awaits first. */
 export async function sharePreparedLog({ files, title, text }) {
   return shareFiles(files, { title, text }, { allowGestureFallback: false })
+}
+
+/** Capture one node as a PNG and open the system share sheet. */
+export async function shareCardScreenshot(
+  node,
+  { filename, title, text },
+) {
+  if (!node) {
+    throw new Error('Couldn’t create a photo. Try again.')
+  }
+  const dataUrl = await captureNodePngDataUrl(node)
+  const file = dataUrlToFile(dataUrl, filename)
+  const payload = { files: [file], title, text }
+  const status = await shareFiles(payload.files, payload)
+  return { status, ...payload }
 }
 
 /** Capture each dog card as its own PNG and open the system share sheet. */

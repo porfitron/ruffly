@@ -8,6 +8,7 @@ import TodayView from '../components/log/TodayView'
 import QuickLogSheet, {
   MenuEditorSheet,
 } from '../components/log/QuickLogSheet'
+import FleamailSheet from '../components/log/FleamailSheet'
 import CatalogTab from '../components/catalog/CatalogTab'
 import CareGuideTab from '../components/trip/CareGuideTab'
 import HomeScreenBadgePrompt from '../components/layout/HomeScreenBadgePrompt'
@@ -36,6 +37,7 @@ export default function WebApp() {
   const [addingNewDog, setAddingNewDog] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
   const [logOpen, setLogOpen] = useState(false)
+  const [fleamailOpen, setFleamailOpen] = useState(false)
   const [editLog, setEditLog] = useState(null)
   const [menuDogId, setMenuDogId] = useState(null)
   const [newDogMenu, setNewDogMenu] = useState(false)
@@ -184,6 +186,15 @@ export default function WebApp() {
           setEditLog(null)
         }}
         onCelebrate={playCelebration}
+        onFleamail={() => {
+          setLogOpen(false)
+          setEditLog(null)
+          setFleamailOpen(true)
+        }}
+      />
+      <FleamailSheet
+        open={fleamailOpen}
+        onClose={() => setFleamailOpen(false)}
       />
       <MenuEditorSheet
         open={Boolean(menuDogId)}
