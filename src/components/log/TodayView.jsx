@@ -30,8 +30,10 @@ import {
   addLocalDays,
   buildPackTodayTasks,
   estimateFoodKcal,
+  formatLogTime,
   formatTodayHeading,
   isSameLocalDay,
+  isTodayCheckableRow,
   isTodayDailyRow,
   isTodayQuickLogRow,
   isoTimestampOnDay,
@@ -99,6 +101,37 @@ function taskTitle(task) {
 function taskAmount(task) {
   if (task.amount == null) return ''
   return `${task.amount}${task.unit ? ` ${task.unit}` : ''}`
+}
+
+function taskSubtitle(task) {
+  const amount = taskAmount(task)
+  const note = task.note?.trim().replace(/\s+/g, ' ')
+  if (task.kind === 'note') {
+    const parts = [formatLogTime(task.doneAt)]
+    if (note && note !== task.name) parts.push(note)
+    return parts.filter(Boolean).join(' · ')
+  }
+  const parts = [kindLabel(task.kind)]
+  if (task.kind === 'activity' && note) {
+    if (note !== task.name) parts.push(note)
+  } else if (task.slotLabel) {
+    parts.push(task.slotLabel)
+  }
+  if (amount) parts.push(amount)
+  return parts.join(' · ')
+}
+
+function NoteMark({ label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-lg leading-none ring-1 ring-amber-200"
+      aria-label={label}
+    >
+      <span aria-hidden>📝</span>
+    </button>
+  )
 }
 
 function CheckButton({ done, partial, label, onClick }) {
@@ -171,41 +204,62 @@ function TaskRow({
   task,
   onDone,
   onUndo,
+  onEdit,
   rowRef,
   dragging = false,
   reorderHandle = null,
 }) {
-  const amount = taskAmount(task)
+  const isNote = task.kind === 'note'
   return (
     <li
       ref={rowRef}
       className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 transition-colors ${
         dragging
           ? 'relative z-10 scale-[1.02] border-[#F59E0B]/40 bg-white shadow-lg'
-          : task.done
+          : task.done && !isNote
             ? 'border-emerald-100 bg-emerald-50/60'
             : 'border-amber-100 bg-[#FBF9F5]'
       }`}
     >
-      <CheckButton
-        done={task.done}
-        label={task.done ? `Undo ${task.name}` : `Mark ${task.name} done`}
-        onClick={() => (task.done ? onUndo?.(task) : onDone?.(task))}
-      />
-      <div className="min-w-0 flex-1">
-        <p
-          className={`truncate text-sm font-semibold ${
-            task.done ? 'text-slate-500 line-through' : 'text-slate-800'
-          }`}
+      {isNote ? (
+        <NoteMark
+          label={`Edit note ${task.name}`}
+          onClick={() => onEdit?.(task)}
+        />
+      ) : (
+        <CheckButton
+          done={task.done}
+          label={task.done ? `Undo ${task.name}` : `Mark ${task.name} done`}
+          onClick={() => (task.done ? onUndo?.(task) : onDone?.(task))}
+        />
+      )}
+      {isNote ? (
+        <button
+          type="button"
+          className="min-w-0 flex-1 text-left"
+          onClick={() => onEdit?.(task)}
         >
-          {taskTitle(task)}
-        </p>
-        <p className="truncate text-xs text-slate-400">
-          {kindLabel(task.kind)}
-          {task.slotLabel ? ` · ${task.slotLabel}` : ''}
-          {amount ? ` · ${amount}` : ''}
-        </p>
-      </div>
+          <p className="truncate text-sm font-semibold text-slate-800">
+            {taskTitle(task)}
+          </p>
+          <p className="line-clamp-2 text-xs text-slate-400">
+            {taskSubtitle(task)}
+          </p>
+        </button>
+      ) : (
+        <div className="min-w-0 flex-1">
+          <p
+            className={`truncate text-sm font-semibold ${
+              task.done ? 'text-slate-500 line-through' : 'text-slate-800'
+            }`}
+          >
+            {taskTitle(task)}
+          </p>
+          <p className="truncate text-xs text-slate-400">
+            {taskSubtitle(task)}
+          </p>
+        </div>
+      )}
       {reorderHandle}
     </li>
   )
@@ -306,6 +360,7 @@ function TodayTaskRow({
   onMealUndo,
   onItemDone,
   onItemUndo,
+  onItemEdit,
   rowRef,
   dragging,
   reorderHandle,
@@ -327,6 +382,7 @@ function TodayTaskRow({
       task={row.task}
       onDone={onItemDone}
       onUndo={onItemUndo}
+      onEdit={onItemEdit}
       rowRef={rowRef}
       dragging={dragging}
       reorderHandle={reorderHandle}
@@ -342,6 +398,7 @@ function DogTodayTaskList({
   onMealUndo,
   onItemDone,
   onItemUndo,
+  onItemEdit,
 }) {
   const { dispatch } = useApp()
   const movable = rows.filter((row) => todayRowKey(row) != null)
@@ -378,6 +435,7 @@ function DogTodayTaskList({
           onMealUndo={onMealUndo}
           onItemDone={onItemDone}
           onItemUndo={onItemUndo}
+          onItemEdit={onItemEdit}
           rowRef={(node) => setItemRef(row.id, node)}
           dragging={row.id === draggingId}
           reorderHandle={
@@ -400,6 +458,7 @@ function DogTodayTaskList({
           onMealUndo={onMealUndo}
           onItemDone={onItemDone}
           onItemUndo={onItemUndo}
+          onItemEdit={onItemEdit}
         />
       ))}
     </ul>
@@ -463,6 +522,7 @@ export default function TodayView({
   onAddDog,
   onOpenPack,
   onEditMenu,
+  onEditLog,
 }) {
   const { dogs, catalog, menusByDogId, logs, dispatch } = useApp()
   const dogCardRefs = useRef(new Map())
@@ -482,7 +542,10 @@ export default function TodayView({
   const homeDogs = dogs.filter((dog) => !isDogAway(dog))
   const totalDue = groups.reduce((sum, g) => sum + g.dueCount, 0)
   const totalDone = groups.reduce((sum, g) => sum + g.doneCount, 0)
-  const totalRows = groups.reduce((sum, g) => sum + g.rows.length, 0)
+  const totalCareRows = groups.reduce(
+    (sum, g) => sum + g.rows.filter(isTodayCheckableRow).length,
+    0,
+  )
   const totalTasks = groups.reduce((sum, g) => sum + g.tasks.length, 0)
 
   function shiftDay(delta) {
@@ -498,14 +561,14 @@ export default function TodayView({
         : 'No logs this day'
       : totalDue === 0
         ? '😊'
-        : `${totalDone} of ${totalRows}`
+        : `${totalDone} of ${totalCareRows}`
   const headingSubtitleLabel =
     totalTasks > 0 && totalDue === 0
       ? viewingToday
         ? 'You’re all caught up'
         : 'All caught up that day'
-      : totalTasks > 0
-        ? `${totalDone} of ${totalRows} care items done`
+      : totalCareRows > 0
+        ? `${totalDone} of ${totalCareRows} care items done`
         : undefined
   const playCelebration = useCallback((theme) => {
     if (!theme) return
@@ -567,6 +630,7 @@ export default function TodayView({
   }
 
   function logTask(task) {
+    if (task.kind === 'note') return
     const careItem = (catalog ?? []).find((c) => c.id === task.careItemId)
     const amount = task.amount
     const kcal =
@@ -596,9 +660,16 @@ export default function TodayView({
   }
 
   function handleUndo(task) {
+    if (task.kind === 'note') return
     if (task.doneLogId) {
       dispatch({ type: 'DELETE_LOG', payload: task.doneLogId })
     }
+  }
+
+  function handleEditNote(task) {
+    if (task?.kind !== 'note' || !task.doneLogId) return
+    const log = (logs ?? []).find((entry) => entry.id === task.doneLogId)
+    if (log) onEditLog?.(log)
   }
 
   function handleMealDone(meal) {
@@ -752,7 +823,7 @@ export default function TodayView({
         <p className="share-hide px-0.5 text-sm text-red-600">{shareError}</p>
       ) : null}
 
-      {totalDue === 0 ? (
+      {totalCareRows > 0 && totalDue === 0 ? (
         <Card className="border border-emerald-100 bg-emerald-50/50 text-center">
           <p className="text-base font-bold text-emerald-800">
             Pack’s looking good
@@ -808,7 +879,7 @@ export default function TodayView({
                     </button>
                   </div>
                   <p className="text-xs text-slate-400">
-                    {rows.length > 0 && dueCount === 0
+                    {rows.some(isTodayCheckableRow) && dueCount === 0
                       ? viewingToday
                         ? 'All done for today'
                         : 'All done'
@@ -829,6 +900,7 @@ export default function TodayView({
                   onMealUndo={handleMealUndo}
                   onItemDone={handleDone}
                   onItemUndo={handleUndo}
+                  onItemEdit={handleEditNote}
                 />
               ) : !hasMenu ? (
                 <p className="rounded-2xl bg-[#FBF9F5] px-3 py-3 text-sm text-slate-500">

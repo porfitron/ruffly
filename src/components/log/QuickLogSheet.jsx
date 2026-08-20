@@ -5,7 +5,7 @@ import Button from '../ui/Button'
 import { Field, SegmentedControl, fieldClassName } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
 import { isDogAway } from '../../utils/dogs'
-import { estimateFoodKcal, kindLabel } from '../../utils/todayCare'
+import { estimateFoodKcal, isoTimestampOnDayAt, kindLabel, timeInputFromDate } from '../../utils/todayCare'
 import FoodCreateFields, {
   emptyCreate,
   foodCreateIsValid,
@@ -77,20 +77,22 @@ function buildNonFoodCareItem(form, id, kind, amount, unit) {
   }
 }
 
-/** Quick log sheet — choose Food / Med / Supplement / Weight / Activity, then ADD_LOG. */
+/** Quick log sheet — choose Food / Med / Supplement / Weight / Activity / Note, then ADD_LOG. */
 export default function QuickLogSheet({
   open,
   onClose,
   onCelebrate,
   initialDogId = null,
   initialKind = null,
+  editLog = null,
 }) {
   const { dogs, activeDogId, catalog, dispatch, createId } = useApp()
   const homeDogs = useMemo(
     () => (dogs ?? []).filter((d) => !isDogAway(d)),
     [dogs],
   )
-  const skipChoice = Boolean(initialKind)
+  const editingNote = editLog?.kind === 'note'
+  const skipChoice = Boolean(initialKind) || editingNote
   const [step, setStep] = useState(skipChoice ? 'form' : 'choose')
   const [dogId, setDogId] = useState(
     () => preferredHomeDogId(homeDogs, initialDogId || activeDogId),
@@ -101,6 +103,8 @@ export default function QuickLogSheet({
   const [amount, setAmount] = useState('')
   const [unit, setUnit] = useState('')
   const [note, setNote] = useState('')
+  const [noteTitle, setNoteTitle] = useState('')
+  const [noteTime, setNoteTime] = useState(() => timeInputFromDate())
   const [activityType, setActivityType] = useState('walk')
   const [creating, setCreating] = useState(false)
   const [createForm, setCreateForm] = useState(() =>
@@ -112,9 +116,15 @@ export default function QuickLogSheet({
 
   useEffect(() => {
     if (!open) return
-    setDogId(preferredHomeDogId(homeDogs, initialDogId || activeDogId))
-    setKind(initialKind || 'food')
-    setStep(initialKind ? 'form' : 'choose')
+    const editing = editLog?.kind === 'note'
+    setDogId(
+      preferredHomeDogId(
+        homeDogs,
+        editing ? editLog.dogId : initialDogId || activeDogId,
+      ),
+    )
+    setKind(editing ? 'note' : initialKind || 'food')
+    setStep(editing || initialKind ? 'form' : 'choose')
     setQuery('')
     setSelectedId(null)
     setAmount('')
@@ -127,7 +137,11 @@ export default function QuickLogSheet({
             ? 'tablet'
             : '',
     )
-    setNote('')
+    setNote(editing ? editLog.note ?? '' : '')
+    setNoteTitle(editing ? editLog.label ?? '' : '')
+    setNoteTime(
+      timeInputFromDate(editing ? editLog.loggedAt : undefined),
+    )
     setActivityType('walk')
     setCreating(false)
     setCreateForm(emptyCreate(initialKind || 'food'))
@@ -177,6 +191,8 @@ export default function QuickLogSheet({
     setQuery('')
     setCreateForm(emptyCreate(next))
     setNote('')
+    setNoteTitle('')
+    setNoteTime(timeInputFromDate())
     setActivityType('walk')
     if (next === 'weight') {
       setUnit(dog?.weightUnit ?? 'lbs')
@@ -200,6 +216,36 @@ export default function QuickLogSheet({
 
   function handleSave() {
     if (!dog) return
+
+    if (kind === 'note') {
+      const title = noteTitle.trim()
+      if (!title) return
+      const loggedAt = isoTimestampOnDayAt(
+        editingNote ? editLog.loggedAt || new Date() : new Date(),
+        noteTime,
+      )
+      const payload = {
+        dogId: dog.id,
+        careItemId: null,
+        kind: 'note',
+        amount: null,
+        unit: null,
+        kcal: null,
+        note: note.trim(),
+        label: title,
+        loggedAt,
+      }
+      if (editingNote) {
+        dispatch({
+          type: 'UPDATE_LOG',
+          payload: { ...editLog, ...payload },
+        })
+      } else {
+        dispatch({ type: 'ADD_LOG', payload })
+      }
+      onClose?.()
+      return
+    }
 
     if (kind === 'weight') {
       const weight = Number(amount)
@@ -236,7 +282,6 @@ export default function QuickLogSheet({
         activityType === 'other'
           ? note.trim() || 'Activity'
           : ACTIVITY_LABELS[activityType] || 'Activity'
-      const extraNote = activityType === 'other' ? '' : note.trim()
       dispatch({
         type: 'ADD_LOG',
         payload: {
@@ -246,7 +291,7 @@ export default function QuickLogSheet({
           amount: minutes,
           unit: 'min',
           kcal: null,
-          note: extraNote,
+          note: note.trim(),
           label,
         },
       })
@@ -300,9 +345,17 @@ export default function QuickLogSheet({
     onClose?.()
   }
 
+  function handleDeleteNote() {
+    if (!editingNote || !editLog?.id) return
+    dispatch({ type: 'DELETE_LOG', payload: editLog.id })
+    onClose?.()
+  }
+
   const canSave =
     Boolean(dog) &&
-    (kind === 'weight'
+    (kind === 'note'
+      ? Boolean(noteTitle.trim())
+      : kind === 'weight'
       ? Number(amount) > 0
       : kind === 'activity'
         ? Number(amount) > 0 &&
@@ -317,7 +370,11 @@ export default function QuickLogSheet({
     ? 'Everyone’s away'
     : choosing
       ? 'What to log?'
-      : `Log ${kindLabel(kind).toLowerCase()}`
+      : editingNote
+        ? 'Edit note'
+        : kind === 'note'
+          ? 'Log note'
+          : `Log ${kindLabel(kind).toLowerCase()}`
 
   return (
     <Modal open={open} title={modalTitle} onClose={onClose}>
@@ -476,81 +533,116 @@ export default function QuickLogSheet({
               )
             ) : null}
 
-            {kind === 'activity' ? (
-              <Field label="What kind?">
-                <SegmentedControl
-                  value={activityType}
-                  onChange={setActivityType}
-                  options={ACTIVITY_OPTIONS}
-                  ariaLabel="Activity type"
-                />
-              </Field>
-            ) : null}
-
-            {kind === 'activity' ? (
-              <Field label="Duration (minutes)" htmlFor="ql-log-amt">
-                <input
-                  id="ql-log-amt"
-                  type="number"
-                  inputMode="decimal"
-                  className={fieldClassName}
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="30"
-                />
-              </Field>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <Field
-                  label={kind === 'weight' ? 'Weight' : 'Amount'}
-                  htmlFor="ql-log-amt"
-                >
+            {kind === 'note' ? (
+              <>
+                <Field label="Title" htmlFor="ql-note-title">
                   <input
-                    id="ql-log-amt"
-                    type="number"
-                    inputMode="decimal"
+                    id="ql-note-title"
                     className={fieldClassName}
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder={selected?.defaultAmount?.toString() ?? ''}
+                    value={noteTitle}
+                    onChange={(e) => setNoteTitle(e.target.value)}
+                    placeholder="Vet visit, extra treat…"
+                    autoFocus
                   />
                 </Field>
-                <Field label="Unit" htmlFor="ql-log-unit">
+                <Field label="Time" htmlFor="ql-note-time">
                   <input
-                    id="ql-log-unit"
+                    id="ql-note-time"
+                    type="time"
                     className={fieldClassName}
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
+                    value={noteTime}
+                    onChange={(e) => setNoteTime(e.target.value)}
+                  />
+                </Field>
+                <Field label="Comment (optional)" htmlFor="ql-note">
+                  <textarea
+                    id="ql-note"
+                    className={`${fieldClassName} h-28 resize-none py-3`}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="What happened…"
+                  />
+                </Field>
+              </>
+            ) : (
+              <>
+                {kind === 'activity' ? (
+                  <Field label="What kind?">
+                    <SegmentedControl
+                      value={activityType}
+                      onChange={setActivityType}
+                      options={ACTIVITY_OPTIONS}
+                      ariaLabel="Activity type"
+                    />
+                  </Field>
+                ) : null}
+
+                {kind === 'activity' ? (
+                  <Field label="Duration (minutes)" htmlFor="ql-log-amt">
+                    <input
+                      id="ql-log-amt"
+                      type="number"
+                      inputMode="decimal"
+                      className={fieldClassName}
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="30"
+                    />
+                  </Field>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field
+                      label={kind === 'weight' ? 'Weight' : 'Amount'}
+                      htmlFor="ql-log-amt"
+                    >
+                      <input
+                        id="ql-log-amt"
+                        type="number"
+                        inputMode="decimal"
+                        className={fieldClassName}
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder={selected?.defaultAmount?.toString() ?? ''}
+                      />
+                    </Field>
+                    <Field label="Unit" htmlFor="ql-log-unit">
+                      <input
+                        id="ql-log-unit"
+                        className={fieldClassName}
+                        value={unit}
+                        onChange={(e) => setUnit(e.target.value)}
+                        placeholder={
+                          kind === 'weight'
+                            ? dog?.weightUnit || 'lbs'
+                            : selected?.unit || ''
+                        }
+                      />
+                    </Field>
+                  </div>
+                )}
+
+                <Field
+                  label={
+                    kind === 'activity' && activityType === 'other'
+                      ? 'What did you do?'
+                      : 'Note (optional)'
+                  }
+                  htmlFor="ql-note"
+                >
+                  <input
+                    id="ql-note"
+                    className={fieldClassName}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
                     placeholder={
-                      kind === 'weight'
-                        ? dog?.weightUnit || 'lbs'
-                        : selected?.unit || ''
+                      kind === 'activity' && activityType === 'other'
+                        ? 'Fetch, hike, swim…'
+                        : ''
                     }
                   />
                 </Field>
-              </div>
+              </>
             )}
-
-            <Field
-              label={
-                kind === 'activity' && activityType === 'other'
-                  ? 'What did you do?'
-                  : 'Note (optional)'
-              }
-              htmlFor="ql-note"
-            >
-              <input
-                id="ql-note"
-                className={fieldClassName}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder={
-                  kind === 'activity' && activityType === 'other'
-                    ? 'Fetch, hike, swim…'
-                    : ''
-                }
-              />
-            </Field>
           </div>
 
           <div className="mt-4 flex gap-2">
@@ -558,9 +650,18 @@ export default function QuickLogSheet({
               Cancel
             </Button>
             <Button className="flex-1" disabled={!canSave} onClick={handleSave}>
-              Save log
+              {kind === 'note' ? 'Save note' : 'Save log'}
             </Button>
           </div>
+          {editingNote ? (
+            <Button
+              variant="ghost"
+              className="mt-2 w-full text-red-500"
+              onClick={handleDeleteNote}
+            >
+              Delete note
+            </Button>
+          ) : null}
         </>
       )}
     </Modal>

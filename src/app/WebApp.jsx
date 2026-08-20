@@ -36,6 +36,7 @@ export default function WebApp() {
   const [addingNewDog, setAddingNewDog] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
   const [logOpen, setLogOpen] = useState(false)
+  const [editLog, setEditLog] = useState(null)
   const [menuDogId, setMenuDogId] = useState(null)
   const [newDogMenu, setNewDogMenu] = useState(false)
   const [celebration, setCelebration] = useState(null)
@@ -115,7 +116,14 @@ export default function WebApp() {
         {activeTab === 'today' ? <HomeScreenBadgePrompt /> : null}
         {activeTab === 'today' && (
           <TodayView
-            onLog={() => setLogOpen(true)}
+            onLog={() => {
+              setEditLog(null)
+              setLogOpen(true)
+            }}
+            onEditLog={(log) => {
+              setEditLog(log)
+              setLogOpen(true)
+            }}
             onAddDog={openAddDog}
             onOpenPack={() => handleTabChange('pack')}
             onEditMenu={openMenuEditor}
@@ -149,7 +157,10 @@ export default function WebApp() {
           <Navigation
             activeTab={activeTab}
             onChange={handleTabChange}
-            onLog={() => setLogOpen(true)}
+            onLog={() => {
+              setEditLog(null)
+              setLogOpen(true)
+            }}
           />
         )}
         {activeTab === 'pantry' || activeTab === 'care' ? (
@@ -167,7 +178,11 @@ export default function WebApp() {
 
       <QuickLogSheet
         open={logOpen}
-        onClose={() => setLogOpen(false)}
+        editLog={editLog}
+        onClose={() => {
+          setLogOpen(false)
+          setEditLog(null)
+        }}
         onCelebrate={playCelebration}
       />
       <MenuEditorSheet

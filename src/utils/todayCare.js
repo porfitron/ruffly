@@ -44,6 +44,41 @@ export function isoTimestampOnDay(day, now = new Date()) {
   return d.toISOString()
 }
 
+/** `HH:MM` for `<input type="time">`. */
+export function timeInputFromDate(isoOrDate = new Date()) {
+  const d = new Date(isoOrDate)
+  const source = Number.isNaN(d.getTime()) ? new Date() : d
+  const h = String(source.getHours()).padStart(2, '0')
+  const m = String(source.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
+}
+
+/** Stamp `day` at a local `HH:MM` time. */
+export function isoTimestampOnDayAt(day, timeHHmm, now = new Date()) {
+  const [hRaw, mRaw] = String(timeHHmm ?? '').split(':')
+  const hours = Number(hRaw)
+  const minutes = Number(mRaw)
+  const d = startOfLocalDay(day)
+  d.setHours(
+    Number.isFinite(hours) ? hours : now.getHours(),
+    Number.isFinite(minutes) ? minutes : now.getMinutes(),
+    0,
+    0,
+  )
+  return d.toISOString()
+}
+
+/** Short local time, e.g. "7:32 AM". */
+export function formatLogTime(isoOrDate) {
+  if (!isoOrDate) return ''
+  const d = new Date(isoOrDate)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 export function logsForDogOnDay(logs, dogId, day = new Date()) {
   return (logs ?? []).filter(
     (log) => log.dogId === dogId && isSameLocalDay(log.loggedAt, day),
@@ -123,7 +158,14 @@ export function isMealSlot(slot) {
   return MEAL_SLOTS.has(String(slot ?? '').toLowerCase())
 }
 
-const KIND_ORDER = { food: 0, med: 1, supplement: 2, weight: 3, activity: 4 }
+const KIND_ORDER = {
+  food: 0,
+  med: 1,
+  supplement: 2,
+  weight: 3,
+  activity: 4,
+  note: 5,
+}
 
 function sortMealItems(a, b) {
   const kind = (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9)
@@ -133,7 +175,7 @@ function sortMealItems(a, b) {
   })
 }
 
-const QUICK_LOG_KINDS = new Set(['food', 'weight', 'activity'])
+const QUICK_LOG_KINDS = new Set(['food', 'weight', 'activity', 'note'])
 
 /** Stable key for persisting Today row order (meals, planned items, + logs). */
 export function todayRowKey(row) {
@@ -164,6 +206,13 @@ export function isTodayQuickLogRow(row) {
 export function todayRowIsDone(row) {
   if (!row) return false
   return row.type === 'meal' ? Boolean(row.done) : Boolean(row.task?.done)
+}
+
+/** Menu / checkable care — notes sit on Today but are not due or done. */
+export function isTodayCheckableRow(row) {
+  if (!row) return false
+  if (row.type === 'meal') return true
+  return row.task?.kind !== 'note'
 }
 
 /** New + logs sit just above the first completed row until the user drags. */
@@ -288,12 +337,15 @@ function claimLogsForMenuItems(menuItems, catalog, todayLogs) {
 /** Today-only row from a log that is not on the dog’s planned menu. */
 function extraTaskFromLog(dog, log, careItem, day = new Date()) {
   const kind = log.kind || careItem?.kind || 'food'
+  const note = log.note?.trim() || ''
   const name =
     kind === 'weight'
       ? 'Weight'
       : kind === 'activity'
-        ? log.label || log.note?.trim() || 'Activity'
-        : careItem?.formula || careItem?.name || log.note?.trim() || kindLabel(kind)
+        ? log.label || note || 'Activity'
+        : kind === 'note'
+          ? log.label?.trim() || 'Note'
+          : careItem?.formula || careItem?.name || note || kindLabel(kind)
 
   return {
     id: `${dog.id}:extra:${log.id}`,
@@ -304,6 +356,7 @@ function extraTaskFromLog(dog, log, careItem, day = new Date()) {
     careItemId: log.careItemId ?? null,
     kind,
     name,
+    note,
     brand: careItem?.brand,
     flavor: careItem?.flavor,
     category: careItem?.category,
@@ -311,7 +364,7 @@ function extraTaskFromLog(dog, log, careItem, day = new Date()) {
     slotLabel: isSameLocalDay(day) ? formatSlotLabel('extra') : 'Extra',
     amount: log.amount,
     unit: log.unit,
-    done: true,
+    done: kind !== 'note',
     doneAt: log.loggedAt ?? null,
     doneLogId: log.id,
     oneTime: true,
@@ -393,11 +446,15 @@ export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new
       dog,
       tasks,
       rows,
-      dueCount: rows.filter((row) =>
-        row.type === 'meal' ? !row.done : !row.task.done,
+      dueCount: rows.filter(
+        (row) =>
+          isTodayCheckableRow(row) &&
+          (row.type === 'meal' ? !row.done : !row.task.done),
       ).length,
-      doneCount: rows.filter((row) =>
-        row.type === 'meal' ? row.done : row.task.done,
+      doneCount: rows.filter(
+        (row) =>
+          isTodayCheckableRow(row) &&
+          (row.type === 'meal' ? row.done : row.task.done),
       ).length,
       kcalLogged,
       targetDER: dog.targetDER ?? null,
@@ -426,5 +483,6 @@ export function kindLabel(kind) {
   if (kind === 'supplement') return 'Supplement'
   if (kind === 'weight') return 'Weight'
   if (kind === 'activity') return 'Activity'
+  if (kind === 'note') return 'Note'
   return 'Food'
 }

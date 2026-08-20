@@ -10,7 +10,14 @@ export const EMPTY_OWNER_ACCOUNT = {
 }
 
 export const CARE_ITEM_KINDS = ['food', 'med', 'supplement']
-export const LOG_KINDS = ['food', 'med', 'supplement', 'weight', 'activity']
+export const LOG_KINDS = [
+  'food',
+  'med',
+  'supplement',
+  'weight',
+  'activity',
+  'note',
+]
 
 export const DEFAULT_APP_DATA = {
   activeDogId: null,
