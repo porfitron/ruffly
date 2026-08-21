@@ -9,6 +9,7 @@ import {
   syncHomeScreenBadge,
 } from '../../utils/appBadge'
 import { countPackDueTasks } from '../../utils/todayCare'
+import { track } from '../../analytics'
 
 /**
  * iOS needs a tap to grant notification permission before setAppBadge draws.
@@ -23,21 +24,30 @@ export default function HomeScreenBadgePrompt() {
 
   if (badgePromptDismissed || !visible) return null
 
-  function dismiss() {
+  function dismiss({ fromEnable = false } = {}) {
     setVisible(false)
     dispatch({ type: 'DISMISS_BADGE_PROMPT' })
+    if (!fromEnable) track('dismiss_home_badge')
   }
 
   async function enable() {
     setBusy(true)
     const permission = await requestBadgeNotificationPermission()
     setBusy(false)
+    track('enable_home_badge', {
+      result:
+        permission === 'granted'
+          ? 'Granted'
+          : permission === 'denied'
+            ? 'Denied'
+            : 'Dismissed',
+    })
     if (permission === 'granted') {
       await syncHomeScreenBadge(
         countPackDueTasks(dogs, menusByDogId, catalog, logs),
       )
     }
-    dismiss()
+    dismiss({ fromEnable: true })
   }
 
   return (
@@ -50,12 +60,12 @@ export default function HomeScreenBadgePrompt() {
         <Button className="w-full" onClick={enable} disabled={busy}>
           Enable badge
         </Button>
-        <Button
-          variant="secondary"
-          className="w-full"
-          onClick={dismiss}
-          disabled={busy}
-        >
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={() => dismiss()}
+            disabled={busy}
+          >
           Not now
         </Button>
       </div>

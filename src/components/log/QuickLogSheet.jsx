@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, Plus, Search } from 'lucide-react'
 import Modal from '../ui/Modal'
 import Button from '../ui/Button'
@@ -13,6 +13,7 @@ import FoodCreateFields, {
   foodListLabel,
 } from '../catalog/FoodCreateFields'
 import LogChoice from './LogChoice'
+import { kindLabel as analyticsKind, slotLabel, track } from '../../analytics'
 
 const ACTIVITY_OPTIONS = [
   { value: 'walk', label: 'Walk' },
@@ -111,9 +112,32 @@ export default function QuickLogSheet({
   const [createForm, setCreateForm] = useState(() =>
     emptyCreate(initialKind || 'food'),
   )
+  const savedRef = useRef(false)
+  const wasOpenRef = useRef(false)
+  const kindRef = useRef(kind)
+  const stepRef = useRef(step)
+  kindRef.current = kind
+  stepRef.current = step
 
   const dog = homeDogs.find((d) => d.id === dogId) ?? homeDogs[0]
   const choosing = step === 'choose' && !skipChoice
+
+  useEffect(() => {
+    if (open) {
+      savedRef.current = false
+      wasOpenRef.current = true
+      return undefined
+    }
+    if (wasOpenRef.current && !savedRef.current) {
+      track('abandon_log_sheet', {
+        item_kind: analyticsKind(kindRef.current),
+        source:
+          stepRef.current === 'choose' ? 'Type picker' : 'Form',
+      })
+    }
+    wasOpenRef.current = false
+    return undefined
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -211,7 +235,9 @@ export default function QuickLogSheet({
   }
 
   function handlePickKind(next) {
+    track('select_log_type', { item_kind: analyticsKind(next) })
     if (next === 'fleamail') {
+      savedRef.current = true
       onFleamail?.()
       return
     }
@@ -245,8 +271,12 @@ export default function QuickLogSheet({
           type: 'UPDATE_LOG',
           payload: { ...editLog, ...payload },
         })
+        savedRef.current = true
+        track('edit_log_entry', { item_kind: 'Note', method: 'Log sheet' })
       } else {
         dispatch({ type: 'ADD_LOG', payload })
+        savedRef.current = true
+        track('create_log_entry', { item_kind: 'Note', method: 'Log sheet' })
       }
       onClose?.()
       return
@@ -276,6 +306,8 @@ export default function QuickLogSheet({
           weightUnit: unit || dog.weightUnit || 'lbs',
         },
       })
+      savedRef.current = true
+      track('create_log_entry', { item_kind: 'Weight', method: 'Log sheet' })
       onClose?.()
       return
     }
@@ -300,6 +332,19 @@ export default function QuickLogSheet({
           label,
         },
       })
+      savedRef.current = true
+      track('create_log_entry', {
+        item_kind: 'Activity',
+        method: 'Log sheet',
+        activity_type:
+          activityType === 'walk'
+            ? 'Walk'
+            : activityType === 'play'
+              ? 'Play'
+              : activityType === 'training'
+                ? 'Training'
+                : 'Other',
+      })
       onClose?.()
       if (activityType === 'play') onCelebrate?.('play')
       return
@@ -323,6 +368,10 @@ export default function QuickLogSheet({
         return
       }
       dispatch({ type: 'UPSERT_CARE_ITEM', payload: careItem })
+      track('add_catalog_item', {
+        item_kind: analyticsKind(kind),
+        source: 'Log sheet',
+      })
     }
 
     if (!careItem) return
@@ -347,12 +396,20 @@ export default function QuickLogSheet({
         note: note.trim(),
       },
     })
+    savedRef.current = true
+    track('create_log_entry', {
+      item_kind: analyticsKind(kind),
+      method: 'Log sheet',
+      created_item: creating ? 'Yes' : 'No',
+    })
     onClose?.()
   }
 
   function handleDeleteNote() {
     if (!editingNote || !editLog?.id) return
     dispatch({ type: 'DELETE_LOG', payload: editLog.id })
+    savedRef.current = true
+    track('delete_log_entry', { item_kind: 'Note', method: 'Log sheet' })
     onClose?.()
   }
 
@@ -799,6 +856,10 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
         unit,
       },
     ])
+    track('add_routine_item', {
+      item_kind: analyticsKind(careItem.kind),
+      slot: slotLabel(slot),
+    })
     setQuery('')
     setCreating(false)
     setCreateForm(emptyCreate(pickKind))
@@ -845,11 +906,21 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
       }
     }
     dispatch({ type: 'UPSERT_CARE_ITEM', payload: careItem })
+    track('add_catalog_item', {
+      item_kind: analyticsKind(pickKind),
+      source: 'Routine editor',
+    })
     addItem(careItem, createForm.defaultAmount)
   }
 
   function removeItem(menuItemId) {
+    const removed = menu.find((item) => item.id === menuItemId)
+    const care = catalog.find((c) => c.id === removed?.careItemId)
     setMenuItems(menu.filter((item) => item.id !== menuItemId))
+    track('remove_routine_item', {
+      item_kind: analyticsKind(care?.kind),
+      slot: slotLabel(removed?.slot),
+    })
   }
 
   if (!open) return null

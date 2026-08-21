@@ -11,6 +11,7 @@ import {
   summarizePlan,
   QR_CYCLE_MS,
 } from '../../utils/planTransfer'
+import { track, trackException } from '../../analytics'
 
 function planStateFromApp(app) {
   return {
@@ -41,10 +42,12 @@ function SharePlanDialog({ open, onClose }) {
   const [paused, setPaused] = useState(false)
   const [error, setError] = useState('')
   const [omittedPhotos, setOmittedPhotos] = useState(false)
+  const trackedRef = useRef(false)
 
   useEffect(() => {
     if (!open) return undefined
     let cancelled = false
+    trackedRef.current = false
     setQrUrls([])
     setFrameIndex(0)
     setPaused(false)
@@ -62,9 +65,20 @@ function SharePlanDialog({ open, onClose }) {
         if (!cancelled) {
           setQrUrls(urls)
           setOmittedPhotos(Boolean(encoded.omittedPhotos))
+          if (!trackedRef.current) {
+            trackedRef.current = true
+            track('export_plan', {
+              result: 'QR ready',
+              photos_omitted: encoded.omittedPhotos ? 'Yes' : 'No',
+            })
+          }
         }
       } catch (err) {
-        if (!cancelled) setError(err.message || 'Could not create QR code.')
+        if (!cancelled) {
+          setError(err.message || 'Could not create QR code.')
+          track('export_plan', { result: 'Failed' })
+          trackException('Export plan failed')
+        }
       }
     })()
 
@@ -239,6 +253,7 @@ function ReceivePlanDialog({ open, onClose }) {
           setError(
             'Could not open the camera. Allow camera access and try again.',
           )
+          trackException('Receive plan camera failed')
         }
       }
     })()
@@ -264,6 +279,7 @@ function ReceivePlanDialog({ open, onClose }) {
   function confirmImport() {
     if (!pendingPlan) return
     dispatch({ type: 'REPLACE_ALL', payload: pendingPlan })
+    track('import_plan', { result: 'Imported' })
     close()
   }
 
@@ -367,6 +383,7 @@ function ResetAppDialog({ open, onClose }) {
       type: 'REPLACE_ALL',
       payload: structuredClone(DEFAULT_APP_DATA),
     })
+    track('reset_app')
     onClose()
   }
 

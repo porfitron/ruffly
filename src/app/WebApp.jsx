@@ -14,6 +14,7 @@ import CareGuideTab from '../components/trip/CareGuideTab'
 import HomeScreenBadgePrompt from '../components/layout/HomeScreenBadgePrompt'
 import MealCelebration from '../components/ui/MealCelebration'
 import { useApp } from '../context/AppContext'
+import { track, useAnalyticsScreen } from '../analytics'
 
 const SUBTITLES = {
   today: 'What your pack needs today',
@@ -44,6 +45,14 @@ export default function WebApp() {
   const [celebration, setCelebration] = useState(null)
 
   const accountIncomplete = isOwnerAccountIncomplete(ownerAccount)
+  const screen = showAccount
+    ? 'account'
+    : activeTab === 'pantry'
+      ? 'catalog'
+      : activeTab === 'care'
+        ? 'care'
+        : activeTab
+  useAnalyticsScreen(screen)
   const dismissCelebration = useCallback(() => setCelebration(null), [])
   const playCelebration = useCallback((theme) => {
     if (!theme) return
@@ -60,12 +69,20 @@ export default function WebApp() {
   }
 
   function openAddDog() {
+    track('open_add_dog', { source: 'Today' })
     setActiveTab('pack')
     setAddingNewDog(true)
   }
 
   function openMenuEditor(dogId) {
+    track('open_routine_editor', { source: activeTab === 'pack' ? 'Pack' : 'Today' })
     setMenuDogId(dogId ?? dogs[0]?.id ?? 'pick')
+  }
+
+  function openLogSheet({ edit = null, source = 'Log button' } = {}) {
+    track('open_log_sheet', { source })
+    setEditLog(edit)
+    setLogOpen(true)
   }
 
   const menuItems = [
@@ -118,14 +135,8 @@ export default function WebApp() {
         {activeTab === 'today' ? <HomeScreenBadgePrompt /> : null}
         {activeTab === 'today' && (
           <TodayView
-            onLog={() => {
-              setEditLog(null)
-              setLogOpen(true)
-            }}
-            onEditLog={(log) => {
-              setEditLog(log)
-              setLogOpen(true)
-            }}
+            onLog={() => openLogSheet({ source: 'Today' })}
+            onEditLog={(log) => openLogSheet({ edit: log, source: 'Today' })}
             onAddDog={openAddDog}
             onOpenPack={() => handleTabChange('pack')}
             onEditMenu={openMenuEditor}
@@ -135,8 +146,14 @@ export default function WebApp() {
         {activeTab === 'pack' && (
           <DogsOverview
             addingNew={addingNewDog}
-            onAddNew={() => setAddingNewDog(true)}
-            onCancelAdd={() => setAddingNewDog(false)}
+            onAddNew={() => {
+              track('open_add_dog', { source: 'Pack' })
+              setAddingNewDog(true)
+            }}
+            onCancelAdd={() => {
+              track('cancel_add_dog', { source: 'Pack' })
+              setAddingNewDog(false)
+            }}
             onAdded={(dogId) => {
               setAddingNewDog(false)
               // Menu is the onboarding goal.
@@ -159,10 +176,7 @@ export default function WebApp() {
           <Navigation
             activeTab={activeTab}
             onChange={handleTabChange}
-            onLog={() => {
-              setEditLog(null)
-              setLogOpen(true)
-            }}
+            onLog={() => openLogSheet({ source: 'Navigation' })}
           />
         )}
         {activeTab === 'pantry' || activeTab === 'care' ? (
@@ -205,6 +219,7 @@ export default function WebApp() {
           setNewDogMenu(false)
         }}
         onClose={() => {
+          if (menuDogId) track('close_routine_editor')
           setMenuDogId(null)
           setNewDogMenu(false)
         }}

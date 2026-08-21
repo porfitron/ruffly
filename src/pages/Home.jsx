@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import BrandMark from '../components/ui/BrandMark'
+import { track } from '../analytics'
 
 /**
  * Marketing home placeholder — replace with the real landing when ready.
@@ -30,6 +31,7 @@ export default function Home() {
           <Link
             to="/web"
             className="inline-flex h-12 items-center justify-center rounded-2xl bg-[#F59E0B] px-6 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-500"
+            onClick={() => track('open_app', { source: 'Home' })}
           >
             Open the app
           </Link>

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import BrandMark from '../components/ui/BrandMark'
+import { track } from '../analytics'
 
 export default function About() {
   return (
@@ -30,6 +31,7 @@ export default function About() {
           <Link
             to="/web"
             className="text-sm font-bold text-[#F59E0B] underline-offset-4 hover:underline"
+            onClick={() => track('open_app', { source: 'About us' })}
           >
             Open the app
           </Link>

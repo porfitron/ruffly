@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Modal from '../ui/Modal'
 import Button from '../ui/Button'
 import { useApp } from '../../context/AppContext'
+import { track } from '../../analytics'
 
 /** False-door Pro teaser for multi-dog */
 export default function ProTeaserModal() {
@@ -17,6 +18,9 @@ export default function ProTeaserModal() {
   function handleSubmit(e) {
     e.preventDefault()
     dispatch({ type: 'SET_PRO_EMAIL', payload: email.trim() || null })
+    track('join_pro_waitlist', {
+      provided_email: email.trim() ? 'Yes' : 'No',
+    })
     setOpen(false)
   }
 

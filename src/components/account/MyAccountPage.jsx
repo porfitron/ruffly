@@ -7,6 +7,7 @@ import { useApp } from '../../context/AppContext'
 import { EMPTY_OWNER_ACCOUNT } from '../../utils/storage'
 import DogPhotoPicker from '../profile/DogPhotoPicker'
 import { initialsFromName } from '../profile/DogAvatar'
+import { track } from '../../analytics'
 
 /** Owner contact details that seed Care contacts on the Trip tab */
 export default function MyAccountPage({ onBack }) {
@@ -37,6 +38,12 @@ export default function MyAccountPage({ onBack }) {
         email: form.email.trim(),
         photoUrl: form.photoUrl ?? '',
       },
+    })
+    track('save_account', {
+      has_name: form.name.trim() ? 'Yes' : 'No',
+      has_phone: form.phone.trim() ? 'Yes' : 'No',
+      has_email: form.email.trim() ? 'Yes' : 'No',
+      has_photo: form.photoUrl ? 'Yes' : 'No',
     })
     setSavedFlash(true)
     window.setTimeout(() => setSavedFlash(false), 1600)

@@ -5,6 +5,7 @@ import Button from '../ui/Button'
 import { Field, fieldClassName } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
 import { FOOD_CATEGORIES } from '../../utils/calculations'
+import { track } from '../../analytics'
 
 const EMPTY = {
   brand: '',
@@ -117,6 +118,10 @@ export default function FoodItemForm({
     }
 
     dispatch({ type: 'UPSERT_FOOD', payload: food })
+    track(isEditing ? 'edit_catalog_item' : 'add_catalog_item', {
+      item_kind: 'Food',
+      source: addToBowl ? 'Bowl' : 'Catalog',
+    })
     if (addToBowl && !isEditing) {
       dispatch({ type: 'ADD_TO_MEAL', payload: food.id })
     }
@@ -134,6 +139,7 @@ export default function FoodItemForm({
   function handleDelete() {
     if (!editingFood) return
     dispatch({ type: 'REMOVE_FOOD', payload: editingFood.id })
+    track('remove_catalog_item', { item_kind: 'Food', source: 'Catalog' })
     onDone?.()
   }
 

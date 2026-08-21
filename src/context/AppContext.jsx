@@ -30,6 +30,7 @@ import {
 } from '../utils/dogs'
 import { msUntilNextLocalMidnight, syncHomeScreenBadge } from '../utils/appBadge'
 import { countPackDueTasks } from '../utils/todayCare'
+import { setUserContext } from '../analytics'
 
 const AppContext = createContext(null)
 
@@ -530,6 +531,12 @@ export function AppProvider({ children }) {
   useEffect(() => {
     saveAppData(state)
   }, [state])
+
+  useEffect(() => {
+    const menus = state.menusByDogId ?? {}
+    const hasRoutine = Object.values(menus).some((items) => items?.length > 0)
+    setUserContext({ packSize: state.dogs.length, hasRoutine })
+  }, [state.dogs.length, state.menusByDogId])
 
   // Keep ?pup= in sync when there are multiple dogs; strip for a single pup.
   useEffect(() => {

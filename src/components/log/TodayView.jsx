@@ -27,6 +27,12 @@ import {
   shareTodayScreenshots,
 } from '../../utils/shareToday'
 import {
+  kindLabel as analyticsKind,
+  shareResultLabel,
+  track,
+  trackException,
+} from '../../analytics'
+import {
   addLocalDays,
   buildPackTodayTasks,
   estimateFoodKcal,
@@ -602,9 +608,16 @@ export default function TodayView({
       })
       if (result?.status === 'needs-gesture') {
         setPendingShare(result)
+        track('share_today_log', { result: shareResultLabel('needs-gesture') })
+      } else {
+        track('share_today_log', {
+          result: shareResultLabel(result?.status),
+        })
       }
     } catch (err) {
       if (err?.name !== 'AbortError') {
+        track('share_today_log', { result: 'Failed' })
+        trackException('Share today log failed')
         setShareError(
           err?.message || 'Couldn’t share the log. Try again.',
         )
@@ -619,9 +632,14 @@ export default function TodayView({
     if (!payload) return
     // Call share in this tap — Android Chrome rejects share() after any await.
     sharePreparedLog(payload)
-      .then(() => setPendingShare(null))
+      .then((status) => {
+        setPendingShare(null)
+        track('share_today_log', { result: shareResultLabel(status) })
+      })
       .catch((err) => {
         if (err?.name !== 'AbortError') {
+          track('share_today_log', { result: 'Failed' })
+          trackException('Share today log failed')
           setShareError(
             err?.message || 'Couldn’t share the log. Try again.',
           )
@@ -657,12 +675,20 @@ export default function TodayView({
       : null
     logTask(task)
     playCelebration(theme)
+    track('check_off_routine', {
+      item_kind: analyticsKind(task.kind),
+      method: 'Today check-off',
+    })
   }
 
   function handleUndo(task) {
     if (task.kind === 'note') return
     if (task.doneLogId) {
       dispatch({ type: 'DELETE_LOG', payload: task.doneLogId })
+      track('undo_routine', {
+        item_kind: analyticsKind(task.kind),
+        method: 'Today check-off',
+      })
     }
   }
 
@@ -680,6 +706,10 @@ export default function TodayView({
       if (!item.done) logTask(item)
     }
     playCelebration(theme)
+    track('complete_meal', {
+      item_count: meal.items.filter((item) => !item.done).length,
+      method: 'Today check-off',
+    })
   }
 
   function handleMealUndo(meal) {
@@ -688,6 +718,10 @@ export default function TodayView({
         dispatch({ type: 'DELETE_LOG', payload: item.doneLogId })
       }
     }
+    track('undo_routine', {
+      item_kind: 'Meal',
+      method: 'Today check-off',
+    })
   }
 
   if (dogs.length === 0) {

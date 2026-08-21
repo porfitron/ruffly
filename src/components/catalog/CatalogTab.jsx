@@ -13,6 +13,7 @@ import FoodCreateFields, {
   buildFoodCareItem,
   foodListLabel,
 } from './FoodCreateFields'
+import { kindLabel as analyticsKind, track } from '../../analytics'
 
 const KIND_FILTERS = [
   { value: 'all', label: 'All' },
@@ -89,12 +90,20 @@ function NonFoodEditor({ item, kind, initialName = '', onDone }) {
         productUrl: item?.productUrl ?? '',
       },
     })
+    track(isEdit ? 'edit_catalog_item' : 'add_catalog_item', {
+      item_kind: analyticsKind(item?.kind ?? kind),
+      source: 'Catalog',
+    })
     onDone?.()
   }
 
   function handleDelete() {
     if (!item) return
     dispatch({ type: 'REMOVE_CARE_ITEM', payload: item.id })
+    track('remove_catalog_item', {
+      item_kind: analyticsKind(item.kind),
+      source: 'Catalog',
+    })
     onDone?.()
   }
 
@@ -177,6 +186,7 @@ function FoodCreateInCatalog({ initialName = '', onDone }) {
       type: 'UPSERT_CARE_ITEM',
       payload: buildFoodCareItem(form, createId('item')),
     })
+    track('add_catalog_item', { item_kind: 'Food', source: 'Catalog' })
     onDone?.()
   }
 
@@ -444,12 +454,16 @@ export default function CatalogTab() {
                         variant="ghost"
                         className="!h-10 shrink-0 px-3 text-red-500"
                         aria-label={`Remove ${item.name}`}
-                        onClick={() =>
+                        onClick={() => {
                           dispatch({
                             type: 'REMOVE_CARE_ITEM',
                             payload: item.id,
                           })
-                        }
+                          track('remove_catalog_item', {
+                            item_kind: analyticsKind(item.kind),
+                            source: 'Catalog',
+                          })
+                        }}
                       >
                         <Trash2 size={16} />
                       </Button>

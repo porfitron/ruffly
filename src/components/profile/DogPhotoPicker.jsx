@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Camera } from 'lucide-react'
 import DogAvatar from './DogAvatar'
 import { fileToDogPhotoDataUrl } from '../../utils/dogPhoto'
+import { trackException } from '../../analytics'
 
 /** Tappable profile avatar — pick a photo, preview in place. Commits via parent Save. */
 export default function DogPhotoPicker({
@@ -34,6 +35,7 @@ export default function DogPhotoPicker({
       onChange?.(nextUrl)
     } catch (err) {
       onError?.(err?.message || "Couldn't use that photo.")
+      trackException('Photo upload failed')
     } finally {
       setBusy(false)
     }

@@ -3,6 +3,7 @@ import { AppProvider } from './context/AppContext'
 import Home from './pages/Home'
 import About from './pages/About'
 import WebApp from './app/WebApp'
+import { useAnalyticsScreen } from './analytics'
 import { isStandaloneDisplay } from './utils/appBadge'
 
 function StandaloneAppRedirect() {
@@ -13,10 +14,23 @@ function StandaloneAppRedirect() {
   return null
 }
 
+function MarketingPageViews() {
+  const { pathname } = useLocation()
+  const screen =
+    pathname.startsWith('/web')
+      ? null
+      : pathname === '/about'
+        ? 'about'
+        : 'home'
+  useAnalyticsScreen(screen)
+  return null
+}
+
 export default function App() {
   return (
     <>
       <StandaloneAppRedirect />
+      <MarketingPageViews />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />

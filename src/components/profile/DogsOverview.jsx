@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { GripVertical } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
@@ -8,6 +8,7 @@ import { useHoldReorder } from '../../hooks/useHoldReorder'
 import { getDogProfileCompletion } from '../../utils/storage'
 import { kindLabel } from '../../utils/todayCare'
 import { isDogAway } from '../../utils/dogs'
+import { track } from '../../analytics'
 import DogSummaryCard from './DogSummaryCard'
 import ProfileEditor from './ProfileEditor'
 
@@ -38,6 +39,10 @@ function DogPackDetail({ dog, onEditMenu, onEditProfile }) {
     dispatch({
       type: 'UPDATE_DOG_PROFILE',
       payload: { id: dog.id, away: value === 'away' },
+    })
+    track('set_dog_presence', {
+      presence: value === 'away' ? 'Away' : 'Home',
+      method: 'Pack detail',
     })
   }
 
@@ -147,6 +152,12 @@ export default function DogsOverview({
     .map((id) => dogsById.get(id))
     .filter(Boolean)
 
+  useEffect(() => {
+    if (dogs.length === 0 && !addingNew) {
+      track('open_add_dog', { source: 'First dog' })
+    }
+  }, [dogs.length, addingNew])
+
   function handleSelect(id) {
     setEditingDogId(null)
     setExpandedDogId((current) => (current === id ? null : id))
@@ -228,12 +239,17 @@ export default function DogsOverview({
                   ) : null
                 }
                 onSelect={() => handleSelect(dog.id)}
-                onTogglePresence={() =>
+                onTogglePresence={() => {
+                  const nextAway = !isDogAway(dog)
                   dispatch({
                     type: 'UPDATE_DOG_PROFILE',
-                    payload: { id: dog.id, away: !isDogAway(dog) },
+                    payload: { id: dog.id, away: nextAway },
                   })
-                }
+                  track('set_dog_presence', {
+                    presence: nextAway ? 'Away' : 'Home',
+                    method: 'Pack card',
+                  })
+                }}
               />
               {expanded ? (
                 editing ? (

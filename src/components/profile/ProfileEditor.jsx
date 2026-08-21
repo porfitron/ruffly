@@ -11,6 +11,7 @@ import {
   resolveGoalMultiplier,
 } from '../../utils/calculations'
 import DogPhotoPicker from './DogPhotoPicker'
+import { track } from '../../analytics'
 
 const CALORIE_MODE_OPTIONS = [
   { value: 'manual', label: 'Manual' },
@@ -148,6 +149,12 @@ export default function ProfileEditor({
         mealsPerDay: isNew ? 2 : (editingDog?.mealsPerDay === 1 ? 1 : 2),
       },
     })
+    track(isNew ? 'add_dog' : 'edit_dog', {
+      calorie_mode: isManual ? 'Manual' : 'Calculator',
+      has_photo: Boolean(form.photoUrl),
+      pack_size: isNew ? dogs.length + 1 : dogs.length,
+      source: isNew ? (addingNew ? 'Add dog' : 'First dog') : 'Edit profile',
+    })
     setSavedFlash(true)
     onAdded?.(dogId)
     window.setTimeout(() => setSavedFlash(false), 1600)
@@ -156,6 +163,7 @@ export default function ProfileEditor({
   function handleRemove() {
     if (!editingDog) return
     dispatch({ type: 'REMOVE_DOG', payload: editingDog.id })
+    track('remove_dog', { pack_size: Math.max(0, dogs.length - 1) })
     setConfirmRemove(false)
     onCancel?.()
   }

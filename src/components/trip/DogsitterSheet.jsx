@@ -4,6 +4,7 @@ import Card from '../ui/Card'
 import Button from '../ui/Button'
 import Modal from '../ui/Modal'
 import { useApp } from '../../context/AppContext'
+import { track } from '../../analytics'
 import {
   resolveActiveFeedingPlan,
   resolveMealSessions,
@@ -562,6 +563,9 @@ export default function DogsitterSheet() {
         : `Care Guide — ${activeDog.name}`
     document.documentElement.setAttribute('data-print-dogs', scope)
     allowClearAtRef.current = Date.now() + 750
+    track('print_care_guide', {
+      method: scope === 'all' ? 'Whole pack' : 'One dog',
+    })
     // Two frames: let the confirm modal unmount, then snapshot.
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {

@@ -4,6 +4,7 @@ import Button from '../ui/Button'
 import { Field, fieldClassName } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
 import { EMPTY_CARE_INFO, EMPTY_OWNER_ACCOUNT } from '../../utils/storage'
+import { track } from '../../analytics'
 
 function careInfoHasContent(careInfo) {
   if (!careInfo) return false
@@ -68,6 +69,7 @@ export default function CareInfoForm() {
   function handleSave(e) {
     e.preventDefault()
     dispatch({ type: 'UPDATE_CARE_INFO', payload: form })
+    track('save_care_contacts')
     setSavedFlash(true)
     if (careInfoHasContent(form)) {
       setExpanded(false)

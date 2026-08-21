@@ -12,6 +12,7 @@ import {
   shareCardScreenshot,
   sharePreparedLog,
 } from '../../utils/shareToday'
+import { shareResultLabel, track, trackException } from '../../analytics'
 
 const MESSAGE_MAX = 120
 const CREAM = '#FBF9F5'
@@ -151,13 +152,18 @@ export default function FleamailSheet({ open, onClose }) {
       })
       if (result?.status === 'needs-gesture') {
         setPendingShare(result)
+        track('send_fleamail', { result: shareResultLabel('needs-gesture') })
       } else if (result?.status === 'cancelled') {
+        track('send_fleamail', { result: 'Cancelled' })
         // Stay in the composer so they can try again.
       } else {
+        track('send_fleamail', { result: shareResultLabel(result?.status) })
         onClose?.()
       }
     } catch (err) {
       if (err?.name !== 'AbortError') {
+        track('send_fleamail', { result: 'Failed' })
+        trackException('Fleamail failed')
         setError(err?.message || 'Couldn’t send Fleamail. Try again.')
       }
     } finally {
@@ -169,12 +175,15 @@ export default function FleamailSheet({ open, onClose }) {
     const payload = pendingShare
     if (!payload) return
     sharePreparedLog(payload)
-      .then(() => {
+      .then((status) => {
         setPendingShare(null)
+        track('send_fleamail', { result: shareResultLabel(status) })
         onClose?.()
       })
       .catch((err) => {
         if (err?.name !== 'AbortError') {
+          track('send_fleamail', { result: 'Failed' })
+          trackException('Fleamail failed')
           setError(err?.message || 'Couldn’t send Fleamail. Try again.')
         }
       })
