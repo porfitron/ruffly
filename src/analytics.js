@@ -56,6 +56,7 @@ const EVENT_CATALOG = {
   check_off_routine: { label: 'Checked off a routine item', group: 'Routines' },
   undo_routine: { label: 'Undid a routine check', group: 'Routines' },
   complete_meal: { label: 'Completed a meal', group: 'Routines' },
+  switch_today_group: { label: 'Switched Today grouping', group: 'Routines' },
   open_routine_editor: { label: 'Opened routine editor', group: 'Routines' },
   add_routine_item: { label: 'Added an item to a routine', group: 'Routines' },
   remove_routine_item: { label: 'Removed an item from a routine', group: 'Routines' },

@@ -447,6 +447,11 @@ function reducer(state, action) {
         ...state,
         tripSettings: { ...state.tripSettings, ...action.payload },
       }
+    case 'SET_TODAY_GROUP_BY': {
+      const todayGroupBy = action.payload === 'meal' ? 'meal' : 'dog'
+      if (state.todayGroupBy === todayGroupBy) return state
+      return { ...state, todayGroupBy }
+    }
     case 'UPDATE_CARE_INFO': {
       if (!state.activeDogId) return state
       const dogs = state.dogs.map((dog) =>

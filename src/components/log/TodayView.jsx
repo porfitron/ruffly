@@ -38,6 +38,7 @@ import {
   estimateFoodKcal,
   formatLogTime,
   formatTodayHeading,
+  groupPackTodayBySlot,
   isSameLocalDay,
   isTodayCheckableRow,
   isTodayDailyRow,
@@ -208,6 +209,7 @@ function ReorderGrip({ name, dragging, handleProps }) {
 
 function TaskRow({
   task,
+  dogName,
   onDone,
   onUndo,
   onEdit,
@@ -216,6 +218,7 @@ function TaskRow({
   reorderHandle = null,
 }) {
   const isNote = task.kind === 'note'
+  const who = dogName ? `${dogName}’s ` : ''
   return (
     <li
       ref={rowRef}
@@ -229,13 +232,17 @@ function TaskRow({
     >
       {isNote ? (
         <NoteMark
-          label={`Edit note ${task.name}`}
+          label={`Edit note ${who}${task.name}`}
           onClick={() => onEdit?.(task)}
         />
       ) : (
         <CheckButton
           done={task.done}
-          label={task.done ? `Undo ${task.name}` : `Mark ${task.name} done`}
+          label={
+            task.done
+              ? `Undo ${who}${task.name}`
+              : `Mark ${who}${task.name} done`
+          }
           onClick={() => (task.done ? onUndo?.(task) : onDone?.(task))}
         />
       )}
@@ -271,7 +278,21 @@ function TaskRow({
   )
 }
 
-function MealRow({ meal, onDone, onUndo, onItemDone, onItemUndo, rowRef }) {
+function MealRow({
+  meal,
+  title,
+  checkName,
+  strikeTitle = true,
+  dogName,
+  onDone,
+  onUndo,
+  onItemDone,
+  onItemUndo,
+  rowRef,
+}) {
+  const heading = title ?? meal.slotLabel
+  const ariaName = checkName ?? meal.slotLabel
+  const itemWho = dogName ? `${dogName}’s ` : ''
   return (
     <li
       ref={rowRef}
@@ -286,20 +307,24 @@ function MealRow({ meal, onDone, onUndo, onItemDone, onItemUndo, rowRef }) {
           done={meal.done}
           partial={meal.partial}
           label={
-            meal.done
-              ? `Undo ${meal.slotLabel}`
-              : `Mark ${meal.slotLabel} done`
+            meal.done ? `Undo ${ariaName}` : `Mark ${ariaName} done`
           }
           onClick={() => (meal.done ? onUndo?.(meal) : onDone?.(meal))}
         />
         <div className="min-w-0 flex-1">
-          <p
-            className={`truncate text-sm font-semibold ${
-              meal.done ? 'text-slate-500 line-through' : 'text-slate-800'
-            }`}
-          >
-            {meal.slotLabel}
-          </p>
+          {typeof heading === 'string' ? (
+            <p
+              className={`truncate text-sm font-semibold ${
+                meal.done && strikeTitle
+                  ? 'text-slate-500 line-through'
+                  : 'text-slate-800'
+              }`}
+            >
+              {heading}
+            </p>
+          ) : (
+            heading
+          )}
           {meal.partial ? (
             <p className="text-xs text-slate-400">
               {meal.items.filter((item) => item.done).length} of{' '}
@@ -320,7 +345,11 @@ function MealRow({ meal, onDone, onUndo, onItemDone, onItemUndo, rowRef }) {
                   item.done ? onItemUndo?.(item) : onItemDone?.(item)
                 }
                 className="flex min-h-11 w-full items-center gap-3 rounded-xl text-left hover:bg-white/80"
-                aria-label={item.done ? `Undo ${title}` : `Log ${title}`}
+                aria-label={
+                  item.done
+                    ? `Undo ${itemWho}${title}`
+                    : `Log ${itemWho}${title}`
+                }
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center">
                   <span
@@ -362,6 +391,10 @@ function MealRow({ meal, onDone, onUndo, onItemDone, onItemUndo, rowRef }) {
 
 function TodayTaskRow({
   row,
+  title,
+  checkName,
+  strikeTitle,
+  dogName,
   onMealDone,
   onMealUndo,
   onItemDone,
@@ -375,6 +408,10 @@ function TodayTaskRow({
     return (
       <MealRow
         meal={row}
+        title={title}
+        checkName={checkName}
+        strikeTitle={strikeTitle}
+        dogName={dogName}
         onDone={onMealDone}
         onUndo={onMealUndo}
         onItemDone={onItemDone}
@@ -386,6 +423,7 @@ function TodayTaskRow({
   return (
     <TaskRow
       task={row.task}
+      dogName={dogName}
       onDone={onItemDone}
       onUndo={onItemUndo}
       onEdit={onItemEdit}
@@ -393,6 +431,128 @@ function TodayTaskRow({
       dragging={dragging}
       reorderHandle={reorderHandle}
     />
+  )
+}
+
+function DogNameButton({ dog, onEditMenu, className = '' }) {
+  return (
+    <button
+      type="button"
+      className={`flex min-w-0 items-center gap-2 text-left ${className}`}
+      onClick={() => onEditMenu?.(dog.id)}
+      aria-label={`Edit ${dog.name}’s routine`}
+    >
+      <DogAvatar name={dog.name} photoUrl={dog.photoUrl} size="sm" />
+      <span className="truncate font-bold text-slate-800">{dog.name}</span>
+    </button>
+  )
+}
+
+function GroupByToggle({ value, onChange }) {
+  return (
+    <div
+      className="share-hide flex rounded-2xl bg-amber-100/70 p-1"
+      role="radiogroup"
+      aria-label="Today grouping"
+    >
+      {[
+        { id: 'dog', label: 'By dog' },
+        { id: 'meal', label: 'By meal' },
+      ].map((option) => {
+        const selected = value === option.id
+        return (
+          <button
+            key={option.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            className={`h-10 flex-1 rounded-xl text-sm font-semibold transition-colors ${
+              selected
+                ? 'bg-white text-slate-800 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+            onClick={() => onChange(option.id)}
+          >
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function SlotSection({
+  section,
+  viewingToday,
+  onEditMenu,
+  onMealDone,
+  onMealUndo,
+  onItemDone,
+  onItemUndo,
+  onItemEdit,
+}) {
+  const subtitle =
+    section.checkableCount > 0 && section.dueCount === 0
+      ? viewingToday
+        ? 'All done for today'
+        : 'All done'
+      : section.dueCount > 0
+        ? `${section.dueCount} left`
+        : null
+
+  const headingId = `today-slot-${String(section.id ?? section.slot).replace(/[^a-z0-9-]+/gi, '-')}`
+  return (
+    <Card className="!p-4" aria-labelledby={headingId}>
+      <div className="mb-3">
+        <h3 id={headingId} className="font-bold text-slate-800">
+          {section.slotLabel}
+        </h3>
+        {subtitle ? (
+          <p className="text-xs text-slate-400">{subtitle}</p>
+        ) : null}
+      </div>
+      <ul className="space-y-3">
+        {section.dogs.map(({ dog, rows }) => {
+          const mealOnly = rows.length === 1 && rows[0].type === 'meal'
+          return (
+            <li key={dog.id} className="space-y-2">
+              {mealOnly ? null : (
+                <DogNameButton dog={dog} onEditMenu={onEditMenu} />
+              )}
+              <ul className="space-y-2">
+                {rows.map((row) => (
+                  <TodayTaskRow
+                    key={row.id}
+                    row={row}
+                    title={
+                      mealOnly ? (
+                        <DogNameButton
+                          dog={dog}
+                          onEditMenu={onEditMenu}
+                          className="w-full"
+                        />
+                      ) : undefined
+                    }
+                    checkName={
+                      row.type === 'meal'
+                        ? `${dog.name}’s ${row.slotLabel}`
+                        : undefined
+                    }
+                    strikeTitle={false}
+                    dogName={dog.name}
+                    onMealDone={onMealDone}
+                    onMealUndo={onMealUndo}
+                    onItemDone={onItemDone}
+                    onItemUndo={onItemUndo}
+                    onItemEdit={onItemEdit}
+                  />
+                ))}
+              </ul>
+            </li>
+          )
+        })}
+      </ul>
+    </Card>
   )
 }
 
@@ -530,7 +690,8 @@ export default function TodayView({
   onEditMenu,
   onEditLog,
 }) {
-  const { dogs, catalog, menusByDogId, logs, dispatch } = useApp()
+  const { dogs, catalog, menusByDogId, logs, todayGroupBy, dispatch } =
+    useApp()
   const dogCardRefs = useRef(new Map())
   const [viewingDay, setViewingDay] = useState(() => startOfLocalDay())
   const [celebration, setCelebration] = useState(null)
@@ -546,6 +707,13 @@ export default function TodayView({
     viewingDay,
   )
   const homeDogs = dogs.filter((dog) => !isDogAway(dog))
+  const canGroupByMeal = homeDogs.length >= 2
+  const showByMeal =
+    canGroupByMeal && todayGroupBy === 'meal' && !sharing
+  const slotSections = showByMeal ? groupPackTodayBySlot(groups) : []
+  const dogsNeedingMenu = showByMeal
+    ? groups.filter((group) => !group.hasMenu && group.rows.length === 0)
+    : []
   const totalDue = groups.reduce((sum, g) => sum + g.dueCount, 0)
   const totalDone = groups.reduce((sum, g) => sum + g.doneCount, 0)
   const totalCareRows = groups.reduce(
@@ -585,6 +753,14 @@ export default function TodayView({
   function setDogCardRef(id, node) {
     if (node) dogCardRefs.current.set(id, node)
     else dogCardRefs.current.delete(id)
+  }
+
+  function handleGroupBy(next) {
+    if (next === todayGroupBy) return
+    dispatch({ type: 'SET_TODAY_GROUP_BY', payload: next })
+    track('switch_today_group', {
+      method: next === 'meal' ? 'By meal' : 'By dog',
+    })
   }
 
   async function handleShareLog() {
@@ -853,6 +1029,13 @@ export default function TodayView({
           }
         />
 
+      {canGroupByMeal ? (
+        <GroupByToggle
+          value={todayGroupBy === 'meal' ? 'meal' : 'dog'}
+          onChange={handleGroupBy}
+        />
+      ) : null}
+
       {shareError ? (
         <p className="share-hide px-0.5 text-sm text-red-600">{shareError}</p>
       ) : null}
@@ -870,6 +1053,24 @@ export default function TodayView({
         </Card>
       ) : null}
 
+      {showByMeal ? (
+        <ul className="space-y-4">
+          {slotSections.map((section) => (
+            <li key={section.id ?? section.slot}>
+              <SlotSection
+                section={section}
+                viewingToday={viewingToday}
+                onEditMenu={onEditMenu}
+                onMealDone={handleMealDone}
+                onMealUndo={handleMealUndo}
+                onItemDone={handleDone}
+                onItemUndo={handleUndo}
+                onItemEdit={handleEditNote}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
       <ul className="space-y-4">
         {groups.map(({ dog, rows, dueCount, kcalLogged, targetDER, hasMenu }) => (
           <li
@@ -957,6 +1158,40 @@ export default function TodayView({
           </li>
         ))}
       </ul>
+      )}
+
+      {dogsNeedingMenu.length > 0 ? (
+        <ul className="space-y-4">
+          {dogsNeedingMenu.map(({ dog }) => (
+            <li key={dog.id}>
+              <Card className="!p-4">
+                <div className="flex items-center gap-3">
+                  <DogAvatar
+                    name={dog.name}
+                    photoUrl={dog.photoUrl}
+                    size="sm"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-bold text-slate-800">
+                      {dog.name}
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      Set a daily menu so care shows up here.{' '}
+                      <button
+                        type="button"
+                        className="font-semibold text-[#F59E0B]"
+                        onClick={() => onEditMenu?.(dog.id)}
+                      >
+                        Set up
+                      </button>
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <button
         type="button"

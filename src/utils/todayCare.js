@@ -464,6 +464,161 @@ export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new
   return groups
 }
 
+function rowSlot(row) {
+  if (row?.type === 'meal') return String(row.slot ?? 'daily').toLowerCase()
+  return String(row?.task?.slot ?? 'daily').toLowerCase()
+}
+
+function rowSlotLabel(row) {
+  if (row?.type === 'meal') return row.slotLabel || formatSlotLabel(row.slot)
+  return row?.task?.slotLabel || formatSlotLabel(row?.task?.slot)
+}
+
+function nextMealSlot(rows, fromIndex) {
+  for (let i = fromIndex + 1; i < rows.length; i += 1) {
+    if (rows[i]?.type === 'meal') return rowSlot(rows[i])
+  }
+  return null
+}
+
+/** Pack-level gap for a non-meal row, using that dog’s By dog order. */
+function packGapKey(prevMeal, nextMeal, packMeals) {
+  if (prevMeal) return `after:${prevMeal}`
+  if (!nextMeal) return 'other'
+  const idx = packMeals.indexOf(nextMeal)
+  if (idx > 0) return `after:${packMeals[idx - 1]}`
+  return 'start'
+}
+
+function uniqueSlotLabels(entries) {
+  const labels = []
+  const seen = new Set()
+  for (const { row } of entries ?? []) {
+    const label = rowSlotLabel(row)
+    if (!label || seen.has(label)) continue
+    seen.add(label)
+    labels.push(label)
+  }
+  return labels
+}
+
+function gapSectionLabel(key, entries, packMeals) {
+  const labels = uniqueSlotLabels(entries)
+  if (labels.length === 1) return labels[0]
+  if (key === 'start') {
+    const firstMeal = packMeals[0]
+    return firstMeal ? `Before ${formatSlotLabel(firstMeal)}` : labels.join(' · ')
+  }
+  if (key.startsWith('after:')) {
+    return `After ${formatSlotLabel(key.slice('after:'.length))}`
+  }
+  return labels.join(' · ') || 'Daily'
+}
+
+function dogsFromEntries(entries) {
+  const dogs = []
+  for (const entry of entries ?? []) {
+    const last = dogs[dogs.length - 1]
+    if (last && last.dog.id === entry.dog.id) {
+      last.rows.push(entry.row)
+    } else {
+      dogs.push({
+        dog: entry.dog,
+        rows: [entry.row],
+        hasMenu: entry.hasMenu,
+      })
+    }
+  }
+  return dogs
+}
+
+function finalizeSlotSection({ id, slot, slotLabel, isMeal, entries }) {
+  const dogs = dogsFromEntries(entries)
+  const rows = dogs.flatMap((d) => d.rows)
+  const checkable = rows.filter(isTodayCheckableRow)
+  return {
+    id,
+    slot,
+    slotLabel,
+    isMeal,
+    dogs,
+    checkableCount: checkable.length,
+    dueCount: checkable.filter((row) => !todayRowIsDone(row)).length,
+    doneCount: checkable.filter((row) => todayRowIsDone(row)).length,
+  }
+}
+
+/**
+ * Transpose per-dog Today groups into slot sections.
+ * Meal cards stay in day order; Daily / extras sit in the same gaps they
+ * occupy in each dog’s By dog list (before breakfast, between meals, after
+ * evening) instead of always collecting at the end.
+ */
+export function groupPackTodayBySlot(packGroups) {
+  const mealSlots = new Set()
+  for (const group of packGroups ?? []) {
+    for (const row of group.rows ?? []) {
+      if (row.type === 'meal') mealSlots.add(rowSlot(row))
+    }
+  }
+  const packMeals = [...mealSlots].sort(
+    (a, b) => slotSortKey(a) - slotSortKey(b),
+  )
+
+  const buckets = new Map()
+
+  function ensure(id, meta) {
+    if (!buckets.has(id)) buckets.set(id, { id, entries: [], ...meta })
+    return buckets.get(id)
+  }
+
+  for (const group of packGroups ?? []) {
+    const rows = group.rows ?? []
+    let prevMeal = null
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i]
+      if (row.type === 'meal') {
+        const slot = rowSlot(row)
+        ensure(`meal:${slot}`, {
+          slot,
+          slotLabel: rowSlotLabel(row),
+          isMeal: true,
+        }).entries.push({ dog: group.dog, row, hasMenu: group.hasMenu })
+        prevMeal = slot
+        continue
+      }
+      const gapId = packGapKey(prevMeal, nextMealSlot(rows, i), packMeals)
+      ensure(gapId, { isMeal: false }).entries.push({
+        dog: group.dog,
+        row,
+        hasMenu: group.hasMenu,
+      })
+    }
+  }
+
+  const orderedIds = ['start']
+  for (const meal of packMeals) {
+    orderedIds.push(`meal:${meal}`, `after:${meal}`)
+  }
+  orderedIds.push('other')
+
+  return orderedIds
+    .map((id) => {
+      const bucket = buckets.get(id)
+      if (!bucket?.entries.length) return null
+      if (bucket.isMeal) {
+        return finalizeSlotSection(bucket)
+      }
+      return finalizeSlotSection({
+        ...bucket,
+        slot: rowSlot(bucket.entries[0].row),
+        slotLabel: gapSectionLabel(id, bucket.entries, packMeals),
+        isMeal: false,
+      })
+    })
+    .filter(Boolean)
+}
+
 /** Incomplete Today rows for Home dogs only (Away dogs are skipped). */
 export function countPackDueTasks(
   dogs,

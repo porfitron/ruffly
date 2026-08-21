@@ -37,6 +37,8 @@ export const DEFAULT_APP_DATA = {
     userEmail: null,
   },
   badgePromptDismissed: false,
+  // Today list grouping: 'dog' | 'meal'. Only used when 2+ home dogs.
+  todayGroupBy: 'dog',
   // Stored dogs[] order is the pack list. Seeded from home/away A–Z on first load.
   packOrder: 'manual',
 }
@@ -489,6 +491,7 @@ export function normalizeAppData(raw) {
       ...(parsed.proTeaser ?? {}),
     },
     badgePromptDismissed: Boolean(parsed.badgePromptDismissed),
+    todayGroupBy: parsed.todayGroupBy === 'meal' ? 'meal' : 'dog',
   }
 }
 
