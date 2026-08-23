@@ -1,7 +1,57 @@
 /** Slug helpers for ?pup= deep links and dog switching. */
 
+export const DOG_PRESENCE = {
+  tracking: 'tracking',
+  active: 'active',
+  away: 'away',
+}
+
+const PRESENCE_ORDER = [
+  DOG_PRESENCE.tracking,
+  DOG_PRESENCE.active,
+  DOG_PRESENCE.away,
+]
+
+/** Resolve Today status. Legacy `away: true` becomes away; everyone else tracks. */
+export function dogPresence(dog) {
+  const value = dog?.presence
+  if (
+    value === DOG_PRESENCE.tracking ||
+    value === DOG_PRESENCE.active ||
+    value === DOG_PRESENCE.away
+  ) {
+    return value
+  }
+  return dog?.away ? DOG_PRESENCE.away : DOG_PRESENCE.tracking
+}
+
 export function isDogAway(dog) {
-  return Boolean(dog?.away)
+  return dogPresence(dog) === DOG_PRESENCE.away
+}
+
+export function isDogTracking(dog) {
+  return dogPresence(dog) === DOG_PRESENCE.tracking
+}
+
+export function isDogActive(dog) {
+  return dogPresence(dog) === DOG_PRESENCE.active
+}
+
+export function cycleDogPresence(dog) {
+  const current = dogPresence(dog)
+  const index = PRESENCE_ORDER.indexOf(current)
+  return PRESENCE_ORDER[(index + 1) % PRESENCE_ORDER.length]
+}
+
+export function presencePatch(presence) {
+  const next = dogPresence({ presence })
+  return { presence: next, away: next === DOG_PRESENCE.away }
+}
+
+export function presenceLabel(presence) {
+  if (presence === DOG_PRESENCE.away) return 'Away'
+  if (presence === DOG_PRESENCE.active) return 'Active'
+  return 'Tracking'
 }
 
 export function sortDogsByName(dogs) {
@@ -12,7 +62,7 @@ export function sortDogsByName(dogs) {
   )
 }
 
-/** Home A–Z, then away A–Z. Seeds stored order for packs that predate drag-to-reorder. */
+/** Tracking/active A–Z, then away A–Z. Seeds stored order for packs that predate drag-to-reorder. */
 export function seedPackOrder(dogs) {
   const named = sortDogsByName(dogs)
   return [

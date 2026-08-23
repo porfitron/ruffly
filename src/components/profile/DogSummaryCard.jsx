@@ -3,6 +3,7 @@ import {
   buildMealBreakdown,
   resolveActiveFeedingPlan,
 } from '../../utils/calculations'
+import { dogPresence, isDogAway } from '../../utils/dogs'
 
 /** Feeding plan for any dog (bowl mix, or sole pantry food). */
 export function feedingPlanForDog(dog, pantry, mealPlan) {
@@ -37,16 +38,18 @@ export function formatPortionSnippet(feedingPlan) {
   return `${feedingPlan.length} foods in bowl`
 }
 
-function PresencePill({ away }) {
+function presencePillClass(presence) {
+  if (presence === 'away') return 'bg-slate-100 text-slate-500'
+  if (presence === 'tracking') return 'bg-red-50 text-red-600'
+  return 'bg-emerald-50 text-[#10B981]'
+}
+
+function PresencePill({ presence }) {
   return (
     <span
-      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-        away
-          ? 'bg-slate-100 text-slate-500'
-          : 'bg-emerald-50 text-[#10B981]'
-      }`}
+      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${presencePillClass(presence)}`}
     >
-      {away ? 'away' : 'home'}
+      {presence}
     </span>
   )
 }
@@ -70,7 +73,8 @@ export default function DogSummaryCard({
   dragging = false,
 }) {
   const name = dog.name?.trim() || 'Unnamed'
-  const away = Boolean(dog.away)
+  const presence = dogPresence(dog)
+  const away = isDogAway(dog)
   const weight =
     dog.weight != null && dog.weight !== ''
       ? `${dog.weight} ${dog.weightUnit || 'lbs'}`
@@ -91,7 +95,7 @@ export default function DogSummaryCard({
         <div className="flex items-center gap-2">
           <p className="truncate text-base font-bold text-slate-800">{name}</p>
           {showPresence && !onTogglePresence ? (
-            <PresencePill away={away} />
+            <PresencePill presence={presence} />
           ) : null}
           {showActiveBadge && active ? (
             <span className="shrink-0 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#F59E0B]">
@@ -153,12 +157,9 @@ export default function DogSummaryCard({
             type="button"
             onClick={onTogglePresence}
             className="flex h-11 shrink-0 items-center rounded-full px-1 hover:bg-slate-50"
-            aria-label={
-              away ? `Mark ${name} as home` : `Pause ${name}’s routine`
-            }
-            aria-pressed={away}
+            aria-label={`${name} is ${presence}. Tap to change Today status.`}
           >
-            <PresencePill away={away} />
+            <PresencePill presence={presence} />
           </button>
         ) : null}
 

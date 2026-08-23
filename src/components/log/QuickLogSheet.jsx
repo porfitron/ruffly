@@ -443,8 +443,8 @@ export default function QuickLogSheet({
       {homeDogs.length === 0 ? (
         <>
           <p className="text-sm text-slate-500">
-            Paused dogs skip logging. Mark a pup as home from Pack when
-            they’re back with you.
+            Away dogs skip logging. Mark a pup as tracking or active from Pack
+            when they’re back with you.
           </p>
           <Button className="mt-4 w-full" onClick={onClose}>
             Close

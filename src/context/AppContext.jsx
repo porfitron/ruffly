@@ -178,6 +178,7 @@ function reducer(state, action) {
         ...(previous ?? {}),
         ...incoming,
         slug,
+        presence: incoming.presence ?? previous?.presence,
         away: incoming.away ?? previous?.away ?? false,
         medicationNeedIds:
           incoming.medicationNeedIds ?? previous?.medicationNeedIds ?? [],

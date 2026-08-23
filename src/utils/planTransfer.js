@@ -4,6 +4,7 @@ import {
   pantryFromCatalog,
   pantryFoodToCatalogItem,
 } from './storage'
+import { dogPresence, DOG_PRESENCE } from './dogs'
 
 function pantryForTransfer(state) {
   if (Array.isArray(state.pantry) && state.pantry.length > 0) return state.pantry
@@ -220,8 +221,25 @@ function dogToRow(dog, { includePhotos = true } = {}) {
     onboarding
       ? [onboarding.basicsDone ? 1 : 0, onboarding.menuDone ? 1 : 0]
       : null,
-    dog.away ? 1 : null,
+    presenceToTransfer(dog),
   ]
+}
+
+function presenceToTransfer(dog) {
+  const presence = dogPresence(dog)
+  if (presence === DOG_PRESENCE.away) return 1
+  if (presence === DOG_PRESENCE.active) return 2
+  return null
+}
+
+function presenceFromTransfer(value) {
+  if (value === 1 || value === 'away') {
+    return { presence: DOG_PRESENCE.away, away: true }
+  }
+  if (value === 2 || value === 'active') {
+    return { presence: DOG_PRESENCE.active }
+  }
+  return {}
 }
 
 function dogFromRow(row) {
@@ -257,7 +275,7 @@ function dogFromRow(row) {
           },
         }
       : {}),
-    ...(row[20] === 1 ? { away: true } : {}),
+    ...presenceFromTransfer(row[20]),
   }
 }
 

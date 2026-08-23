@@ -7,15 +7,31 @@ import { useApp } from '../../context/AppContext'
 import { useHoldReorder } from '../../hooks/useHoldReorder'
 import { getDogProfileCompletion } from '../../utils/storage'
 import { kindLabel } from '../../utils/todayCare'
-import { isDogAway } from '../../utils/dogs'
+import {
+  cycleDogPresence,
+  dogPresence,
+  presenceLabel,
+  presencePatch,
+} from '../../utils/dogs'
 import { track } from '../../analytics'
 import DogSummaryCard from './DogSummaryCard'
 import ProfileEditor from './ProfileEditor'
 
 const PRESENCE_OPTIONS = [
-  { value: 'home', label: 'Home' },
+  { value: 'tracking', label: 'Tracking' },
+  { value: 'active', label: 'Active' },
   { value: 'away', label: 'Away' },
 ]
+
+function presenceHint(presence) {
+  if (presence === 'away') {
+    return 'Away dogs skip Today and logging until they’re back with you.'
+  }
+  if (presence === 'active') {
+    return 'This pup appears on Today without a checklist. Log extras with +.'
+  }
+  return 'Today shows this pup’s full routine to check off.'
+}
 
 function menuSnippet(menu, catalog) {
   if (!menu?.length) return 'No menu yet'
@@ -33,15 +49,15 @@ function DogPackDetail({ dog, onEditMenu, onEditProfile }) {
   const menu = menusByDogId?.[dog.id] ?? []
   const completion = getDogProfileCompletion(dog)
   const missing = completion.fields.filter((f) => !f.done)
-  const away = isDogAway(dog)
+  const presence = dogPresence(dog)
 
   function handlePresence(value) {
     dispatch({
       type: 'UPDATE_DOG_PROFILE',
-      payload: { id: dog.id, away: value === 'away' },
+      payload: { id: dog.id, ...presencePatch(value) },
     })
     track('set_dog_presence', {
-      presence: value === 'away' ? 'Away' : 'Home',
+      presence: presenceLabel(value),
       method: 'Pack detail',
     })
   }
@@ -49,18 +65,14 @@ function DogPackDetail({ dog, onEditMenu, onEditProfile }) {
   return (
     <Card className="!p-4 space-y-3">
       <Field
-        label="Routine"
-        hint={
-          away
-            ? 'Away dogs skip Today until you mark them home.'
-            : 'Pause the routine when this pup isn’t with you.'
-        }
+        label="Today status"
+        hint={presenceHint(presence)}
       >
         <SegmentedControl
-          value={away ? 'away' : 'home'}
+          value={presence}
           onChange={handlePresence}
           options={PRESENCE_OPTIONS}
-          ariaLabel={`Routine for ${dog.name || 'this dog'}`}
+          ariaLabel={`Today status for ${dog.name || 'this dog'}`}
         />
       </Field>
 
@@ -198,7 +210,7 @@ export default function DogsOverview({
         <p className="text-sm text-slate-500">
           {canReorder
             ? 'Tap a dog for menu and profile. Hold the grip to reorder.'
-            : 'Tap a dog for menu and profile. Pause visiting pups when they’re away.'}
+            : 'Tap a dog for menu and profile. Set tracking, active, or away.'}
         </p>
       </div>
 
@@ -240,13 +252,13 @@ export default function DogsOverview({
                 }
                 onSelect={() => handleSelect(dog.id)}
                 onTogglePresence={() => {
-                  const nextAway = !isDogAway(dog)
+                  const next = cycleDogPresence(dog)
                   dispatch({
                     type: 'UPDATE_DOG_PROFILE',
-                    payload: { id: dog.id, away: nextAway },
+                    payload: { id: dog.id, ...presencePatch(next) },
                   })
                   track('set_dog_presence', {
-                    presence: nextAway ? 'Away' : 'Home',
+                    presence: presenceLabel(next),
                     method: 'Pack card',
                   })
                 }}

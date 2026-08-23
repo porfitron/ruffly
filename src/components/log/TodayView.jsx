@@ -20,7 +20,7 @@ import DogAvatar from '../profile/DogAvatar'
 import { useApp } from '../../context/AppContext'
 import { useHoldReorder } from '../../hooks/useHoldReorder'
 import { getCategoryLabel } from '../../utils/calculations'
-import { isDogAway } from '../../utils/dogs'
+import { isDogAway, isDogTracking } from '../../utils/dogs'
 import {
   formatPackUpdateDate,
   sharePreparedLog,
@@ -682,6 +682,123 @@ function DayHeading({
   )
 }
 
+function DogTodayCard({
+  dog,
+  rows,
+  dueCount,
+  kcalLogged,
+  targetDER,
+  hasMenu,
+  followsPlan = true,
+  sharing,
+  viewingToday,
+  viewingDay,
+  onEditMenu,
+  onMealDone,
+  onMealUndo,
+  onItemDone,
+  onItemUndo,
+  onItemEdit,
+  cardRef,
+}) {
+  const subtitle = !followsPlan
+    ? rows.some(isTodayCheckableRow)
+      ? viewingToday
+        ? 'Logged today'
+        : 'Logged'
+      : 'No plan — log with +'
+    : rows.some(isTodayCheckableRow) && dueCount === 0
+      ? viewingToday
+        ? 'All done for today'
+        : 'All done'
+      : dueCount > 0
+        ? `${dueCount} left`
+        : 'No menu yet'
+
+  return (
+    <li
+      ref={cardRef}
+      className={
+        sharing ? 'space-y-4 overflow-visible bg-[#FBF9F5] px-5 py-6' : undefined
+      }
+    >
+      {sharing ? (
+        <div className="flex items-center gap-3">
+          <BrandMark className="h-10 w-10" />
+          <div className="min-w-0">
+            <p className="whitespace-nowrap text-sm font-extrabold leading-5 text-[#F59E0B]">
+              Ruffly
+            </p>
+            <p className="whitespace-nowrap text-xs leading-5 text-slate-500">
+              {dog.name} · {formatPackUpdateDate(viewingDay)}
+            </p>
+          </div>
+        </div>
+      ) : null}
+      <Card className={sharing ? '!p-5 !shadow-none' : '!p-4'}>
+        <div className="mb-3 flex items-center gap-3">
+          <DogAvatar
+            name={dog.name}
+            photoUrl={dog.photoUrl}
+            size="sm"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="truncate font-bold text-slate-800">
+                {dog.name}
+              </h3>
+              {followsPlan ? (
+                <button
+                  type="button"
+                  className="share-hide shrink-0 text-xs font-semibold text-[#F59E0B]"
+                  onClick={() => onEditMenu?.(dog.id)}
+                >
+                  {hasMenu ? 'Edit routine' : 'Add routine'}
+                </button>
+              ) : null}
+            </div>
+            <p className="text-xs text-slate-400">{subtitle}</p>
+            <KcalBar logged={kcalLogged} target={targetDER} />
+          </div>
+        </div>
+
+        {rows.length > 0 ? (
+          <DogTodayTaskList
+            dog={dog}
+            rows={rows}
+            canReorderRows={viewingToday}
+            onMealDone={onMealDone}
+            onMealUndo={onMealUndo}
+            onItemDone={onItemDone}
+            onItemUndo={onItemUndo}
+            onItemEdit={onItemEdit}
+          />
+        ) : followsPlan && !hasMenu ? (
+          <p className="rounded-2xl bg-[#FBF9F5] px-3 py-3 text-sm text-slate-500">
+            Set a daily menu so care shows up here.{' '}
+            <button
+              type="button"
+              className="share-hide font-semibold text-[#F59E0B]"
+              onClick={() => onEditMenu?.(dog.id)}
+            >
+              Set up
+            </button>
+          </p>
+        ) : !followsPlan ? (
+          <p className="rounded-2xl bg-[#FBF9F5] px-3 py-3 text-sm text-slate-500">
+            Nothing logged yet. Use + to add food, meds, or extras.
+          </p>
+        ) : null}
+      </Card>
+      {sharing ? (
+        <p className="pt-1 text-center text-xs leading-5 text-slate-400">
+          Shared from Ruffly.app
+        </p>
+      ) : null}
+    </li>
+  )
+}
+
 /** Post-onboarding home — care due today across the pack. */
 export default function TodayView({
   onLog,
@@ -706,13 +823,16 @@ export default function TodayView({
     logs,
     viewingDay,
   )
-  const homeDogs = dogs.filter((dog) => !isDogAway(dog))
-  const canGroupByMeal = homeDogs.length >= 2
+  const todayDogs = dogs.filter((dog) => !isDogAway(dog))
+  const trackingDogs = todayDogs.filter(isDogTracking)
+  const trackingGroups = groups.filter((group) => group.followsPlan)
+  const activeGroups = groups.filter((group) => !group.followsPlan)
+  const canGroupByMeal = trackingDogs.length >= 2
   const showByMeal =
     canGroupByMeal && todayGroupBy === 'meal' && !sharing
-  const slotSections = showByMeal ? groupPackTodayBySlot(groups) : []
+  const slotSections = showByMeal ? groupPackTodayBySlot(trackingGroups) : []
   const dogsNeedingMenu = showByMeal
-    ? groups.filter((group) => !group.hasMenu && group.rows.length === 0)
+    ? trackingGroups.filter((group) => !group.hasMenu && group.rows.length === 0)
     : []
   const totalDue = groups.reduce((sum, g) => sum + g.dueCount, 0)
   const totalDone = groups.reduce((sum, g) => sum + g.doneCount, 0)
@@ -721,6 +841,11 @@ export default function TodayView({
     0,
   )
   const totalTasks = groups.reduce((sum, g) => sum + g.tasks.length, 0)
+  const trackingCareRows = trackingGroups.reduce(
+    (sum, g) => sum + g.rows.filter(isTodayCheckableRow).length,
+    0,
+  )
+  const trackingDue = trackingGroups.reduce((sum, g) => sum + g.dueCount, 0)
 
   function shiftDay(delta) {
     const next = addLocalDays(viewingDay, delta)
@@ -731,7 +856,9 @@ export default function TodayView({
   const headingSubtitle =
     totalTasks === 0
       ? viewingToday
-        ? 'Nothing on the menu yet'
+        ? trackingDogs.length === 0
+          ? 'Log extras with +'
+          : 'Nothing on the menu yet'
         : 'No logs this day'
       : totalDue === 0
         ? '😊'
@@ -920,7 +1047,7 @@ export default function TodayView({
     )
   }
 
-  if (homeDogs.length === 0) {
+  if (todayDogs.length === 0) {
     return (
       <Card className="space-y-4 text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
@@ -929,8 +1056,8 @@ export default function TodayView({
         <div>
           <h2 className="text-lg font-bold text-slate-800">Everyone’s away</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Paused dogs skip Today. Mark a pup as home from Pack when they’re
-            back with you.
+            Away dogs skip Today. Mark a pup as tracking or active from Pack
+            when they’re back with you.
           </p>
         </div>
         <Button className="w-full" onClick={onOpenPack}>
@@ -940,7 +1067,7 @@ export default function TodayView({
     )
   }
 
-  if (totalTasks === 0) {
+  if (totalTasks === 0 && activeGroups.length === 0) {
     return (
       <div className="space-y-4">
         <DayHeading
@@ -1040,7 +1167,7 @@ export default function TodayView({
         <p className="share-hide px-0.5 text-sm text-red-600">{shareError}</p>
       ) : null}
 
-      {totalCareRows > 0 && totalDue === 0 ? (
+      {trackingCareRows > 0 && trackingDue === 0 ? (
         <Card className="border border-emerald-100 bg-emerald-50/50 text-center">
           <p className="text-base font-bold text-emerald-800">
             Pack’s looking good
@@ -1054,108 +1181,73 @@ export default function TodayView({
       ) : null}
 
       {showByMeal ? (
-        <ul className="space-y-4">
-          {slotSections.map((section) => (
-            <li key={section.id ?? section.slot}>
-              <SlotSection
-                section={section}
-                viewingToday={viewingToday}
-                onEditMenu={onEditMenu}
-                onMealDone={handleMealDone}
-                onMealUndo={handleMealUndo}
-                onItemDone={handleDone}
-                onItemUndo={handleUndo}
-                onItemEdit={handleEditNote}
-              />
-            </li>
-          ))}
-        </ul>
-      ) : (
-      <ul className="space-y-4">
-        {groups.map(({ dog, rows, dueCount, kcalLogged, targetDER, hasMenu }) => (
-          <li
-            key={dog.id}
-            ref={(node) => setDogCardRef(dog.id, node)}
-            className={
-              sharing ? 'space-y-4 overflow-visible bg-[#FBF9F5] px-5 py-6' : undefined
-            }
-          >
-            {sharing ? (
-              <div className="flex items-center gap-3">
-                <BrandMark className="h-10 w-10" />
-                <div className="min-w-0">
-                  <p className="whitespace-nowrap text-sm font-extrabold leading-5 text-[#F59E0B]">
-                    Ruffly
-                  </p>
-                  <p className="whitespace-nowrap text-xs leading-5 text-slate-500">
-                    {dog.name} · {formatPackUpdateDate(viewingDay)}
-                  </p>
-                </div>
-              </div>
-            ) : null}
-            <Card className={sharing ? '!p-5 !shadow-none' : '!p-4'}>
-              <div className="mb-3 flex items-center gap-3">
-                <DogAvatar
-                  name={dog.name}
-                  photoUrl={dog.photoUrl}
-                  size="sm"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="truncate font-bold text-slate-800">
-                      {dog.name}
-                    </h3>
-                    <button
-                      type="button"
-                      className="share-hide shrink-0 text-xs font-semibold text-[#F59E0B]"
-                      onClick={() => onEditMenu?.(dog.id)}
-                    >
-                      {hasMenu ? 'Edit routine' : 'Add routine'}
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-400">
-                    {rows.some(isTodayCheckableRow) && dueCount === 0
-                      ? viewingToday
-                        ? 'All done for today'
-                        : 'All done'
-                      : dueCount > 0
-                        ? `${dueCount} left`
-                        : 'No menu yet'}
-                  </p>
-                  <KcalBar logged={kcalLogged} target={targetDER} />
-                </div>
-              </div>
-
-              {rows.length > 0 ? (
-                <DogTodayTaskList
-                  dog={dog}
-                  rows={rows}
-                  canReorderRows={viewingToday}
+        <>
+          <ul className="space-y-4">
+            {slotSections.map((section) => (
+              <li key={section.id ?? section.slot}>
+                <SlotSection
+                  section={section}
+                  viewingToday={viewingToday}
+                  onEditMenu={onEditMenu}
                   onMealDone={handleMealDone}
                   onMealUndo={handleMealUndo}
                   onItemDone={handleDone}
                   onItemUndo={handleUndo}
                   onItemEdit={handleEditNote}
                 />
-              ) : !hasMenu ? (
-                <p className="rounded-2xl bg-[#FBF9F5] px-3 py-3 text-sm text-slate-500">
-                  Set a daily menu so care shows up here.{' '}
-                  <button
-                    type="button"
-                    className="share-hide font-semibold text-[#F59E0B]"
-                    onClick={() => onEditMenu?.(dog.id)}
-                  >
-                    Set up
-                  </button>
-                </p>
-              ) : null}
-            </Card>
-            {sharing ? (
-              <p className="pt-1 text-center text-xs leading-5 text-slate-400">
-                Shared from Ruffly.app
-              </p>
-            ) : null}
-          </li>
+              </li>
+            ))}
+          </ul>
+          {activeGroups.length > 0 ? (
+            <ul className="space-y-4">
+              {activeGroups.map((group) => (
+                <DogTodayCard
+                  key={group.dog.id}
+                  dog={group.dog}
+                  rows={group.rows}
+                  dueCount={group.dueCount}
+                  kcalLogged={group.kcalLogged}
+                  targetDER={group.targetDER}
+                  hasMenu={group.hasMenu}
+                  followsPlan={group.followsPlan}
+                  sharing={sharing}
+                  viewingToday={viewingToday}
+                  viewingDay={viewingDay}
+                  onEditMenu={onEditMenu}
+                  onMealDone={handleMealDone}
+                  onMealUndo={handleMealUndo}
+                  onItemDone={handleDone}
+                  onItemUndo={handleUndo}
+                  onItemEdit={handleEditNote}
+                  cardRef={(node) => setDogCardRef(group.dog.id, node)}
+                />
+              ))}
+            </ul>
+          ) : null}
+        </>
+      ) : (
+      <ul className="space-y-4">
+        {groups.map((group) => (
+          <DogTodayCard
+            key={group.dog.id}
+            dog={group.dog}
+            rows={group.rows}
+            dueCount={group.dueCount}
+            kcalLogged={group.kcalLogged}
+            targetDER={group.targetDER}
+            hasMenu={group.hasMenu}
+            followsPlan={group.followsPlan}
+            sharing={sharing}
+            viewingToday={viewingToday}
+            viewingDay={viewingDay}
+            onEditMenu={onEditMenu}
+            onMealDone={handleMealDone}
+            onMealUndo={handleMealUndo}
+            onItemDone={handleDone}
+            onItemUndo={handleUndo}
+            onItemEdit={handleEditNote}
+            cardRef={(node) => setDogCardRef(group.dog.id, node)}
+          />
         ))}
       </ul>
       )}

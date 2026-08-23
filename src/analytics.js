@@ -44,7 +44,7 @@ const EVENT_CATALOG = {
   cancel_add_dog: { label: 'Cancelled adding a dog', group: 'Dogs' },
   edit_dog: { label: 'Saved dog profile', group: 'Dogs' },
   remove_dog: { label: 'Removed a dog', group: 'Dogs' },
-  set_dog_presence: { label: 'Changed home / away', group: 'Dogs' },
+  set_dog_presence: { label: 'Changed tracking / active / away', group: 'Dogs' },
 
   open_log_sheet: { label: 'Opened log sheet', group: 'Logs' },
   select_log_type: { label: 'Chose what to log', group: 'Logs' },

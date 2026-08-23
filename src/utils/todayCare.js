@@ -1,6 +1,6 @@
 /** Calendar day helpers + “what’s due today” from menus vs logs. */
 
-import { isDogAway } from './dogs'
+import { isDogAway, isDogTracking } from './dogs'
 
 export function startOfLocalDay(date = new Date()) {
   const d = new Date(date)
@@ -433,17 +433,20 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
   return tasks
 }
 
-/** Home dogs in pack order (away dogs are omitted). */
+/** Tracking and active dogs in pack order (away dogs are omitted). */
 export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new Date()) {
   const groups = []
   for (const dog of dogs ?? []) {
     if (isDogAway(dog)) continue
-    const menu = menusByDogId?.[dog.id] ?? []
+    const followsPlan = isDogTracking(dog)
+    const storedMenu = menusByDogId?.[dog.id] ?? []
+    const menu = followsPlan ? storedMenu : []
     const tasks = buildDogTodayTasks(dog, menu, catalog, logs, day)
     const rows = groupTodayTasks(tasks, dog.todayRowOrder)
     const kcalLogged = foodKcalLoggedToday(logs, dog.id, day)
     groups.push({
       dog,
+      followsPlan,
       tasks,
       rows,
       dueCount: rows.filter(
@@ -458,7 +461,7 @@ export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new
       ).length,
       kcalLogged,
       targetDER: dog.targetDER ?? null,
-      hasMenu: menu.length > 0,
+      hasMenu: followsPlan && storedMenu.length > 0,
     })
   }
   return groups
@@ -619,7 +622,7 @@ export function groupPackTodayBySlot(packGroups) {
     .filter(Boolean)
 }
 
-/** Incomplete Today rows for Home dogs only (Away dogs are skipped). */
+/** Incomplete Today rows for tracking dogs only (away dogs are skipped). */
 export function countPackDueTasks(
   dogs,
   menusByDogId,

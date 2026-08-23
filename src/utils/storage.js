@@ -1,4 +1,4 @@
-import { seedPackOrder, uniqueDogSlug } from './dogs'
+import { dogPresence, seedPackOrder, uniqueDogSlug } from './dogs'
 
 const STORAGE_KEY = 'ruffly_app_data_v1'
 
@@ -37,9 +37,9 @@ export const DEFAULT_APP_DATA = {
     userEmail: null,
   },
   badgePromptDismissed: false,
-  // Today list grouping: 'dog' | 'meal'. Only used when 2+ home dogs.
+  // Today list grouping: 'dog' | 'meal'. Only used when 2+ tracking dogs.
   todayGroupBy: 'dog',
-  // Stored dogs[] order is the pack list. Seeded from home/away A–Z on first load.
+  // Stored dogs[] order is the pack list. Seeded from tracking/away A–Z on first load.
   packOrder: 'manual',
 }
 
@@ -95,11 +95,13 @@ export function normalizeDogRecord(dog, { menuDoneHint } = {}) {
     ? dog.todayRowOrder.filter((key) => typeof key === 'string' && key)
     : []
   const { todayRowOrder: _ignoredTodayRowOrder, ...rest } = dog
+  const presence = dogPresence(dog)
 
   return {
     ...rest,
     onboarding,
-    away: Boolean(dog.away),
+    presence,
+    away: presence === 'away',
     medicationNeedIds: normalizeMedicationNeedIds(dog.medicationNeedIds),
     behaviorNotes: dog.behaviorNotes ?? '',
     licenseNumber: dog.licenseNumber ?? '',
