@@ -125,10 +125,12 @@ function TradingCard({
         <div className="flex min-w-0 items-center gap-2">
           <BrandMark className="h-8 w-8" />
           <div className="min-w-0">
-            <p className="text-xs font-extrabold leading-4 text-[#F59E0B]">
+            <p className="whitespace-nowrap text-xs font-extrabold leading-4 text-[#F59E0B]">
               Ruffly
             </p>
-            <p className="text-[11px] leading-4 text-slate-400">Trading card</p>
+            <p className="whitespace-nowrap text-[11px] leading-4 text-slate-400">
+              Trading card
+            </p>
           </div>
         </div>
         {onShare ? (
