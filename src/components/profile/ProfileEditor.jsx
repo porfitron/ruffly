@@ -11,6 +11,7 @@ import {
   resolveGoalMultiplier,
 } from '../../utils/calculations'
 import DogPhotoPicker from './DogPhotoPicker'
+import { EMPTY_DOG_DISLIKES, EMPTY_DOG_FAVORITES } from '../../utils/storage'
 import { track } from '../../analytics'
 
 const CALORIE_MODE_OPTIONS = [
@@ -26,6 +27,8 @@ const EMPTY_FORM = {
   manualTargetKcal: '',
   activityLevel: 'neutered_adult',
   photoUrl: '',
+  favorites: { ...EMPTY_DOG_FAVORITES },
+  dislikes: { ...EMPTY_DOG_DISLIKES },
 }
 
 function dogToForm(dog) {
@@ -48,6 +51,14 @@ function dogToForm(dog) {
     manualTargetKcal: seededTarget ? String(seededTarget) : '',
     activityLevel: dog.activityLevel ?? 'neutered_adult',
     photoUrl: dog.photoUrl ?? '',
+    favorites: {
+      ...EMPTY_DOG_FAVORITES,
+      ...(dog.favorites ?? {}),
+    },
+    dislikes: {
+      ...EMPTY_DOG_DISLIKES,
+      ...(dog.dislikes ?? {}),
+    },
   }
 }
 
@@ -124,6 +135,13 @@ export default function ProfileEditor({
     })
   }
 
+  function updateNote(group, field, value) {
+    setForm((prev) => ({
+      ...prev,
+      [group]: { ...prev[group], [field]: value },
+    }))
+  }
+
   function handleSave(e) {
     e.preventDefault()
     if (!canSave) return
@@ -147,6 +165,16 @@ export default function ProfileEditor({
         primaryFood: isNew ? null : (editingDog?.primaryFood ?? null),
         careInfo: isNew ? undefined : (editingDog?.careInfo ?? undefined),
         mealsPerDay: isNew ? 2 : (editingDog?.mealsPerDay === 1 ? 1 : 2),
+        favorites: {
+          foodTreat: form.favorites.foodTreat.trim(),
+          toyGame: form.favorites.toyGame.trim(),
+          furiends: form.favorites.furiends.trim(),
+        },
+        dislikes: {
+          people: form.dislikes.people.trim(),
+          places: form.dislikes.places.trim(),
+          things: form.dislikes.things.trim(),
+        },
       },
     })
     track(isNew ? 'add_dog' : 'edit_dog', {
@@ -321,6 +349,68 @@ export default function ProfileEditor({
               </dd>
             </div>
           </dl>
+        </div>
+
+        <div className="space-y-3 border-t border-amber-100 pt-3">
+          <p className="text-sm font-semibold text-slate-800">Favorites</p>
+          <Field label="Food / Treat">
+            <input
+              className={fieldClassName}
+              value={form.favorites.foodTreat}
+              onChange={(e) => updateNote('favorites', 'foodTreat', e.target.value)}
+              placeholder="e.g. peanut butter biscuits"
+              autoComplete="off"
+            />
+          </Field>
+          <Field label="Toy / Game">
+            <input
+              className={fieldClassName}
+              value={form.favorites.toyGame}
+              onChange={(e) => updateNote('favorites', 'toyGame', e.target.value)}
+              placeholder="e.g. tug, fetch, snuffle mat"
+              autoComplete="off"
+            />
+          </Field>
+          <Field label="Furiends">
+            <input
+              className={fieldClassName}
+              value={form.favorites.furiends}
+              onChange={(e) => updateNote('favorites', 'furiends', e.target.value)}
+              placeholder="e.g. the golden next door"
+              autoComplete="off"
+            />
+          </Field>
+        </div>
+
+        <div className="space-y-3 border-t border-amber-100 pt-3">
+          <p className="text-sm font-semibold text-slate-800">Dislikes</p>
+          <Field label="People">
+            <input
+              className={fieldClassName}
+              value={form.dislikes.people}
+              onChange={(e) => updateNote('dislikes', 'people', e.target.value)}
+              placeholder="e.g. delivery drivers"
+              autoComplete="off"
+            />
+          </Field>
+          <Field label="Places">
+            <input
+              className={fieldClassName}
+              value={form.dislikes.places}
+              onChange={(e) => updateNote('dislikes', 'places', e.target.value)}
+              placeholder="e.g. the vet, skate parks"
+              autoComplete="off"
+            />
+          </Field>
+          <Field label="Things">
+            <input
+              className={fieldClassName}
+              value={form.dislikes.things}
+              onChange={(e) => updateNote('dislikes', 'things', e.target.value)}
+              placeholder="e.g. vacuums, skateboards"
+              autoComplete="off"
+            />
+          </Field>
         </div>
 
         <Button type="submit" className="w-full !h-11" disabled={!canSave}>

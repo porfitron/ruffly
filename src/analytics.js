@@ -68,10 +68,12 @@ const EVENT_CATALOG = {
 
   share_today_log: { label: 'Shared today’s log', group: 'Sharing' },
   send_fleamail: { label: 'Sent Fleamail', group: 'Sharing' },
+  share_trading_card: { label: 'Shared a trading card', group: 'Sharing' },
   export_plan: { label: 'Exported a plan', group: 'Sharing' },
   import_plan: { label: 'Imported a plan', group: 'Sharing' },
   print_care_guide: { label: 'Printed a care guide', group: 'Care' },
   save_care_contacts: { label: 'Saved care contacts', group: 'Care' },
+  open_trading_card: { label: 'Opened a trading card', group: 'Sharing' },
 
   save_account: { label: 'Saved account', group: 'Account' },
   reset_app: { label: 'Reset the app', group: 'App' },

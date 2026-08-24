@@ -4,6 +4,7 @@ import Navigation from '../components/layout/Navigation'
 import MenuDialogs from '../components/layout/MenuDialogs'
 import MyAccountPage from '../components/account/MyAccountPage'
 import DogsOverview from '../components/profile/DogsOverview'
+import TradingCardSheet from '../components/profile/TradingCardSheet'
 import TodayView from '../components/log/TodayView'
 import QuickLogSheet, {
   MenuEditorSheet,
@@ -32,7 +33,7 @@ function isOwnerAccountIncomplete(ownerAccount) {
 }
 
 export default function WebApp() {
-  const { ownerAccount, dogs } = useApp()
+  const { ownerAccount, dogs, dispatch } = useApp()
   const [activeTab, setActiveTab] = useState('today')
   const [menuDialog, setMenuDialog] = useState(null)
   const [addingNewDog, setAddingNewDog] = useState(false)
@@ -42,6 +43,7 @@ export default function WebApp() {
   const [editLog, setEditLog] = useState(null)
   const [menuDogId, setMenuDogId] = useState(null)
   const [newDogMenu, setNewDogMenu] = useState(false)
+  const [tradingCardDogId, setTradingCardDogId] = useState(null)
   const [celebration, setCelebration] = useState(null)
 
   const accountIncomplete = isOwnerAccountIncomplete(ownerAccount)
@@ -77,6 +79,16 @@ export default function WebApp() {
   function openMenuEditor(dogId) {
     track('open_routine_editor', { source: activeTab === 'pack' ? 'Pack' : 'Today' })
     setMenuDogId(dogId ?? dogs[0]?.id ?? 'pick')
+  }
+
+  function openCareGuide(dogId) {
+    if (dogId) dispatch({ type: 'SET_ACTIVE_DOG', payload: dogId })
+    handleTabChange('care')
+  }
+
+  function openTradingCard(dogId) {
+    track('open_trading_card', { source: 'Pack' })
+    setTradingCardDogId(dogId)
   }
 
   function openLogSheet({ edit = null, source = 'Log button' } = {}) {
@@ -163,6 +175,8 @@ export default function WebApp() {
               }
             }}
             onEditMenu={openMenuEditor}
+            onPrintCareGuide={openCareGuide}
+            onShowTradingCard={openTradingCard}
           />
         )}
 
@@ -209,6 +223,11 @@ export default function WebApp() {
       <FleamailSheet
         open={fleamailOpen}
         onClose={() => setFleamailOpen(false)}
+      />
+      <TradingCardSheet
+        open={Boolean(tradingCardDogId)}
+        dog={dogs.find((d) => d.id === tradingCardDogId) ?? null}
+        onClose={() => setTradingCardDogId(null)}
       />
       <MenuEditorSheet
         open={Boolean(menuDogId)}

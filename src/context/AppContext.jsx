@@ -6,6 +6,8 @@ import {
   EMPTY_CARE_INFO,
   EMPTY_OWNER_ACCOUNT,
   EMPTY_DOG_ONBOARDING,
+  EMPTY_DOG_DISLIKES,
+  EMPTY_DOG_FAVORITES,
   EMPTY_DOG_PROFILE_DETAILS,
   normalizeAppData,
   normalizeDogRecord,
@@ -188,6 +190,16 @@ function reducer(state, action) {
           incoming.licenseNumber ?? previous?.licenseNumber ?? '',
         vaccineInfo: incoming.vaccineInfo ?? previous?.vaccineInfo ?? '',
         microchipId: incoming.microchipId ?? previous?.microchipId ?? '',
+        favorites: {
+          ...EMPTY_DOG_FAVORITES,
+          ...(previous?.favorites ?? {}),
+          ...(incoming.favorites ?? {}),
+        },
+        dislikes: {
+          ...EMPTY_DOG_DISLIKES,
+          ...(previous?.dislikes ?? {}),
+          ...(incoming.dislikes ?? {}),
+        },
         onboarding: {
           ...EMPTY_DOG_ONBOARDING,
           ...(previous?.onboarding ?? {}),

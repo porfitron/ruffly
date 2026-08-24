@@ -141,6 +141,15 @@ function formatMenuAmount(amount, unit) {
   return `${amount}${unit ? ` ${unit}` : ''}`
 }
 
+function noteGroupFields(group, labels) {
+  return labels
+    .map(({ key, label }) => {
+      const value = group?.[key]?.trim()
+      return value ? { label, value } : null
+    })
+    .filter(Boolean)
+}
+
 function ProfileDetails({ dog, catalog }) {
   const medNeeds = (dog.medicationNeedIds ?? [])
     .map((id) => (catalog ?? []).find((item) => item.id === id))
@@ -164,6 +173,16 @@ function ProfileDetails({ dog, catalog }) {
           value: medNeeds.map((item) => item.name).join(', '),
         }
       : null,
+    ...noteGroupFields(dog.favorites, [
+      { key: 'foodTreat', label: 'Favorite food / treat' },
+      { key: 'toyGame', label: 'Favorite toy / game' },
+      { key: 'furiends', label: 'Furiends' },
+    ]),
+    ...noteGroupFields(dog.dislikes, [
+      { key: 'people', label: 'Dislikes — people' },
+      { key: 'places', label: 'Dislikes — places' },
+      { key: 'things', label: 'Dislikes — things' },
+    ]),
   ].filter(Boolean)
 
   if (fields.length === 0) return null

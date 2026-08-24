@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react'
-import { GripVertical } from 'lucide-react'
+import {
+  ClipboardList,
+  GripVertical,
+  IdCard,
+  Pencil,
+  Printer,
+} from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import { Field, SegmentedControl } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
 import { useHoldReorder } from '../../hooks/useHoldReorder'
 import { getDogProfileCompletion } from '../../utils/storage'
-import { kindLabel } from '../../utils/todayCare'
 import {
   cycleDogPresence,
   dogPresence,
@@ -44,12 +49,42 @@ function menuSnippet(menu, catalog) {
   return `${names.slice(0, 2).join(' · ')} +${names.length - 2}`
 }
 
-function DogPackDetail({ dog, onEditMenu, onEditProfile }) {
+function PackAction({ icon: Icon, label, hint, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-[6.5rem] flex-col items-start gap-2 rounded-2xl bg-[#FBF9F5] p-3 text-left transition-colors hover:bg-amber-50"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[#F59E0B]">
+        <Icon size={18} strokeWidth={2.25} aria-hidden />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-slate-800">
+          {label}
+        </span>
+        {hint ? (
+          <span className="mt-0.5 block text-xs leading-snug text-slate-400">
+            {hint}
+          </span>
+        ) : null}
+      </span>
+    </button>
+  )
+}
+
+function DogPackDetail({
+  dog,
+  onEditMenu,
+  onEditProfile,
+  onPrintCareGuide,
+  onShowTradingCard,
+}) {
   const { catalog, menusByDogId, dispatch } = useApp()
   const menu = menusByDogId?.[dog.id] ?? []
   const completion = getDogProfileCompletion(dog)
-  const missing = completion.fields.filter((f) => !f.done)
   const presence = dogPresence(dog)
+  const hasMenu = menu.length > 0
 
   function handlePresence(value) {
     dispatch({
@@ -76,62 +111,36 @@ function DogPackDetail({ dog, onEditMenu, onEditProfile }) {
         />
       </Field>
 
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold text-slate-800">Daily menu</p>
-          <p className="text-xs text-slate-400">{menuSnippet(menu, catalog)}</p>
-        </div>
-        <Button
-          variant="secondary"
-          className="!h-10 shrink-0 px-3"
+      <div className="grid grid-cols-2 gap-2">
+        <PackAction
+          icon={Pencil}
+          label="Edit profile"
+          hint={
+            completion.isComplete
+              ? 'Profile complete'
+              : `${completion.doneCount}/${completion.total} complete`
+          }
+          onClick={onEditProfile}
+        />
+        <PackAction
+          icon={ClipboardList}
+          label={hasMenu ? 'Manage routine' : 'Create routine'}
+          hint={menuSnippet(menu, catalog)}
           onClick={() => onEditMenu?.(dog.id)}
-        >
-          {menu.length ? 'Edit routine' : 'Set up menu'}
-        </Button>
+        />
+        <PackAction
+          icon={Printer}
+          label="Print care guide"
+          hint="Sitter notes as PDF"
+          onClick={() => onPrintCareGuide?.(dog.id)}
+        />
+        <PackAction
+          icon={IdCard}
+          label="Trading card"
+          hint="Display this pup’s card"
+          onClick={() => onShowTradingCard?.(dog.id)}
+        />
       </div>
-
-      {menu.length > 0 ? (
-        <ul className="space-y-1.5">
-          {menu.slice(0, 4).map((item) => {
-            const care = catalog.find((c) => c.id === item.careItemId)
-            return (
-              <li
-                key={item.id}
-                className="flex justify-between gap-2 rounded-xl bg-[#FBF9F5] px-3 py-2 text-xs"
-              >
-                <span className="truncate font-medium text-slate-700">
-                  {care?.name ?? 'Item'}
-                </span>
-                <span className="shrink-0 text-slate-400">
-                  {kindLabel(care?.kind ?? 'food')} · {item.slot}
-                </span>
-              </li>
-            )
-          })}
-          {menu.length > 4 ? (
-            <li className="px-1 text-xs text-slate-400">
-              +{menu.length - 4} more
-            </li>
-          ) : null}
-        </ul>
-      ) : null}
-
-      {missing.length > 0 ? (
-        <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/40 px-3 py-2.5">
-          <p className="text-xs font-semibold text-slate-600">
-            Profile {completion.doneCount}/{completion.total} complete
-          </p>
-          <p className="mt-0.5 text-xs text-slate-400">
-            Still open: {missing.map((m) => m.label).join(', ')}
-          </p>
-        </div>
-      ) : (
-        <p className="text-xs font-medium text-[#10B981]">Profile complete</p>
-      )}
-
-      <Button variant="ghost" className="w-full !h-10" onClick={onEditProfile}>
-        Edit profile
-      </Button>
     </Card>
   )
 }
@@ -143,6 +152,8 @@ export default function DogsOverview({
   onCancelAdd,
   onAdded,
   onEditMenu,
+  onPrintCareGuide,
+  onShowTradingCard,
 }) {
   const { dogs, dispatch } = useApp()
   const [expandedDogId, setExpandedDogId] = useState(null)
@@ -209,8 +220,8 @@ export default function DogsOverview({
         <h2 className="text-lg font-bold text-slate-800">Your pack</h2>
         <p className="text-sm text-slate-500">
           {canReorder
-            ? 'Tap a dog for menu and profile. Hold the grip to reorder.'
-            : 'Tap a dog for menu and profile. Set tracking, active, or away.'}
+            ? 'Tap a dog for Today status and shortcuts. Hold the grip to reorder.'
+            : 'Tap a dog for Today status and shortcuts. Set tracking, active, or away.'}
         </p>
       </div>
 
@@ -275,6 +286,8 @@ export default function DogsOverview({
                     dog={dog}
                     onEditMenu={onEditMenu}
                     onEditProfile={() => setEditingDogId(dog.id)}
+                    onPrintCareGuide={onPrintCareGuide}
+                    onShowTradingCard={onShowTradingCard}
                   />
                 )
               ) : null}

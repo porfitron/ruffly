@@ -94,6 +94,20 @@ function FleamailShareCard({ dog, message, sentAt, cardRef }) {
   )
 }
 
+function recordFleamailSent(dispatch, dog, message, sentAt) {
+  if (!dispatch || !dog?.id) return
+  dispatch({
+    type: 'ADD_LOG',
+    payload: {
+      dogId: dog.id,
+      kind: 'fleamail',
+      note: message,
+      loggedAt:
+        sentAt instanceof Date ? sentAt.toISOString() : sentAt || new Date().toISOString(),
+    },
+  })
+}
+
 function fleamailFilename(name) {
   const day = new Date()
   const y = day.getFullYear()
@@ -105,7 +119,7 @@ function fleamailFilename(name) {
 
 /** Compose a short note as a dog and share it as a PNG. */
 export default function FleamailSheet({ open, onClose }) {
-  const { dogs, activeDogId } = useApp()
+  const { dogs, activeDogId, dispatch } = useApp()
   // Same order as Pack, including dogs marked away.
   const pack = dogs ?? []
   const cardRef = useRef(null)
@@ -138,8 +152,9 @@ export default function FleamailSheet({ open, onClose }) {
     if (!canSend || !dog) return
     setError('')
     setPendingShare(null)
+    const stampedAt = new Date()
     flushSync(() => {
-      setSentAt(new Date())
+      setSentAt(stampedAt)
       setSending(true)
     })
     await new Promise((resolve) => {
@@ -157,6 +172,7 @@ export default function FleamailSheet({ open, onClose }) {
         track('send_fleamail', { result: 'Cancelled' })
         // Stay in the composer so they can try again.
       } else {
+        recordFleamailSent(dispatch, dog, trimmed, stampedAt)
         track('send_fleamail', { result: shareResultLabel(result?.status) })
         onClose?.()
       }
@@ -176,6 +192,7 @@ export default function FleamailSheet({ open, onClose }) {
     if (!payload) return
     sharePreparedLog(payload)
       .then((status) => {
+        recordFleamailSent(dispatch, dog, trimmed, sentAt)
         setPendingShare(null)
         track('send_fleamail', { result: shareResultLabel(status) })
         onClose?.()

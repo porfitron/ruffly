@@ -17,6 +17,7 @@ export const LOG_KINDS = [
   'weight',
   'activity',
   'note',
+  'fleamail',
 ]
 
 export const DEFAULT_APP_DATA = {
@@ -54,6 +55,27 @@ export const EMPTY_CARE_INFO = {
   notes: '',
 }
 
+export const EMPTY_DOG_FAVORITES = {
+  foodTreat: '',
+  toyGame: '',
+  furiends: '',
+}
+
+export const EMPTY_DOG_DISLIKES = {
+  people: '',
+  places: '',
+  things: '',
+}
+
+function normalizeNoteGroup(raw, empty) {
+  const source = raw && typeof raw === 'object' ? raw : {}
+  const next = { ...empty }
+  for (const key of Object.keys(empty)) {
+    next[key] = typeof source[key] === 'string' ? source[key] : ''
+  }
+  return next
+}
+
 /** Completable profile fields (post-onboarding). Not required for Today / logging. */
 export const EMPTY_DOG_PROFILE_DETAILS = {
   medicationNeedIds: [],
@@ -61,6 +83,8 @@ export const EMPTY_DOG_PROFILE_DETAILS = {
   licenseNumber: '',
   vaccineInfo: '',
   microchipId: '',
+  favorites: { ...EMPTY_DOG_FAVORITES },
+  dislikes: { ...EMPTY_DOG_DISLIKES },
 }
 
 export const EMPTY_DOG_ONBOARDING = {
@@ -107,6 +131,8 @@ export function normalizeDogRecord(dog, { menuDoneHint } = {}) {
     licenseNumber: dog.licenseNumber ?? '',
     vaccineInfo: dog.vaccineInfo ?? '',
     microchipId: dog.microchipId ?? '',
+    favorites: normalizeNoteGroup(dog.favorites, EMPTY_DOG_FAVORITES),
+    dislikes: normalizeNoteGroup(dog.dislikes, EMPTY_DOG_DISLIKES),
     careInfo: { ...EMPTY_CARE_INFO, ...(dog.careInfo ?? {}) },
     ...(todayRowOrder.length ? { todayRowOrder } : {}),
   }

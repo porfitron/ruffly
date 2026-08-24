@@ -37,6 +37,19 @@ function compactText(value) {
   return trimmed || null
 }
 
+function compactNoteGroup(source, keys) {
+  if (!source || typeof source !== 'object') return null
+  const next = {}
+  for (const key of keys) {
+    const text = compactText(source[key])
+    if (text) next[key] = text
+  }
+  return Object.keys(next).length ? next : null
+}
+
+const FAVORITE_KEYS = ['foodTreat', 'toyGame', 'furiends']
+const DISLIKE_KEYS = ['people', 'places', 'things']
+
 function isDataUrl(value) {
   return typeof value === 'string' && value.startsWith('data:')
 }
@@ -222,6 +235,8 @@ function dogToRow(dog, { includePhotos = true } = {}) {
       ? [onboarding.basicsDone ? 1 : 0, onboarding.menuDone ? 1 : 0]
       : null,
     presenceToTransfer(dog),
+    compactNoteGroup(dog.favorites, FAVORITE_KEYS),
+    compactNoteGroup(dog.dislikes, DISLIKE_KEYS),
   ]
 }
 
@@ -276,6 +291,8 @@ function dogFromRow(row) {
         }
       : {}),
     ...presenceFromTransfer(row[20]),
+    ...(row[21] && typeof row[21] === 'object' ? { favorites: row[21] } : {}),
+    ...(row[22] && typeof row[22] === 'object' ? { dislikes: row[22] } : {}),
   }
 }
 

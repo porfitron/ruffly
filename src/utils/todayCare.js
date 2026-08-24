@@ -424,6 +424,7 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
     return at - bt
   })
   for (const log of extras) {
+    if (log.kind === 'fleamail') continue
     const careItem = log.careItemId ? byId.get(log.careItemId) : undefined
     tasks.push(extraTaskFromLog(dog, log, careItem, day))
   }
@@ -642,5 +643,6 @@ export function kindLabel(kind) {
   if (kind === 'weight') return 'Weight'
   if (kind === 'activity') return 'Activity'
   if (kind === 'note') return 'Note'
+  if (kind === 'fleamail') return 'Fleamail'
   return 'Food'
 }
