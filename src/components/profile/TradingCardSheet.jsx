@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Share } from 'lucide-react'
 import Modal from '../ui/Modal'
@@ -81,29 +81,45 @@ function NoteSection({ title, rows, group }) {
       <h3 className="text-[10px] font-bold uppercase tracking-wide text-[#F59E0B]">
         {title}
       </h3>
-      <dl className="mt-1.5 space-y-1.5">
+      <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-2.5">
         {rows.map(({ key, label }) => (
-          <div key={key} className="flex items-start justify-between gap-3">
-            <dt className="shrink-0 text-xs font-semibold text-slate-400">
+          <Fragment key={key}>
+            <dt className="whitespace-nowrap text-xs font-semibold leading-5 text-slate-400">
               {label}
             </dt>
-            <dd className="min-w-0 text-right text-sm font-medium leading-snug text-slate-800">
+            <dd
+              className="text-sm font-medium text-slate-800"
+              style={{ lineHeight: '20px', overflowWrap: 'break-word' }}
+            >
               {noteValue(group, key)}
             </dd>
-          </div>
+          </Fragment>
         ))}
       </dl>
     </section>
   )
 }
 
-function TradingCard({ dog, fleamailCount, cardRef, onShare, sharing }) {
+function TradingCard({
+  dog,
+  fleamailCount,
+  cardRef,
+  onShare,
+  sharing,
+  forCapture = false,
+}) {
   const name = dog?.name?.trim() || 'Pup'
   return (
     <div
       ref={cardRef}
-      className="relative overflow-hidden rounded-[1.75rem] border-4 border-amber-300 px-4 pb-4 pt-3"
-      style={{ backgroundColor: CREAM }}
+      className={`relative rounded-[1.75rem] border-4 border-amber-300 px-5 pb-5 pt-4 ${
+        forCapture ? '' : 'mx-auto w-full max-w-[340px]'
+      }`}
+      style={{
+        backgroundColor: CREAM,
+        boxSizing: 'border-box',
+        ...(forCapture ? { width: 340 } : {}),
+      }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -144,7 +160,7 @@ function TradingCard({ dog, fleamailCount, cardRef, onShare, sharing }) {
         />
       </div>
 
-      <div className="mt-4 space-y-3 rounded-2xl bg-white/80 px-3 py-3">
+      <div className="mt-4 space-y-4 rounded-2xl bg-white px-3.5 py-3.5">
         <NoteSection
           title="Favorites"
           rows={FAVORITE_ROWS}
@@ -235,37 +251,51 @@ export default function TradingCardSheet({ open, dog, onClose }) {
   }
 
   return (
-    <Modal open={open} title={`${name}’s trading card`} onClose={onClose}>
-      {pendingShare ? (
-        <>
-          <p className="text-sm text-slate-500">
-            Your trading card is ready. Tap Share to open your phone’s share
-            sheet.
+    <>
+      {sharing ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-[#FBF9F5]/80 print:hidden"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="absolute top-[max(2rem,env(safe-area-inset-top))] text-sm font-semibold text-[#F59E0B]">
+            Preparing card…
           </p>
-          <Button className="mt-4 w-full" onClick={handlePendingShare}>
-            Share
-            <Share size={18} />
-          </Button>
-        </>
-      ) : (
-        <div className="max-h-[70vh] overflow-y-auto">
           <TradingCard
             dog={dog}
             fleamailCount={fleamailCount}
             cardRef={cardRef}
-            onShare={handleShare}
-            sharing={sharing}
+            forCapture
           />
-          {sharing ? (
-            <p className="mt-3 text-center text-sm font-semibold text-[#F59E0B]">
-              Preparing card…
-            </p>
-          ) : null}
-          {error ? (
-            <p className="mt-3 text-sm text-red-600">{error}</p>
-          ) : null}
         </div>
-      )}
-    </Modal>
+      ) : null}
+
+      <Modal open={open} title={`${name}’s trading card`} onClose={onClose}>
+        {pendingShare ? (
+          <>
+            <p className="text-sm text-slate-500">
+              Your trading card is ready. Tap Share to open your phone’s share
+              sheet.
+            </p>
+            <Button className="mt-4 w-full" onClick={handlePendingShare}>
+              Share
+              <Share size={18} />
+            </Button>
+          </>
+        ) : (
+          <div className="max-h-[70vh] overflow-y-auto">
+            <TradingCard
+              dog={dog}
+              fleamailCount={fleamailCount}
+              onShare={handleShare}
+              sharing={sharing}
+            />
+            {error ? (
+              <p className="mt-3 text-sm text-red-600">{error}</p>
+            ) : null}
+          </div>
+        )}
+      </Modal>
+    </>
   )
 }
