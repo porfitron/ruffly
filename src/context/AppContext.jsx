@@ -32,6 +32,7 @@ import {
 } from '../utils/dogs'
 import { msUntilNextLocalMidnight, syncHomeScreenBadge } from '../utils/appBadge'
 import { countPackDueTasks } from '../utils/todayCare'
+import { mergePlanIntoState } from '../utils/planTransfer'
 import { setUserContext } from '../analytics'
 
 const AppContext = createContext(null)
@@ -501,6 +502,13 @@ function reducer(state, action) {
     }
     case 'REPLACE_ALL': {
       const next = normalizeAppData(action.payload)
+      return {
+        ...next,
+        dogs: (next.dogs ?? []).map(enrichDog),
+      }
+    }
+    case 'MERGE_PLAN': {
+      const next = normalizeAppData(mergePlanIntoState(state, action.payload))
       return {
         ...next,
         dogs: (next.dogs ?? []).map(enrichDog),

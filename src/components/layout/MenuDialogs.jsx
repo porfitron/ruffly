@@ -10,6 +10,7 @@ import {
   createPlanChunkCollector,
   summarizePlan,
   QR_CYCLE_MS,
+  QR_LOG_DAYS,
 } from '../../utils/planTransfer'
 import { track, trackException } from '../../analytics'
 
@@ -116,8 +117,10 @@ function SharePlanDialog({ open, onClose }) {
     <Modal open={open} title="Export Plan" onClose={onClose}>
       <p className="text-sm text-slate-500">
         {multi
-          ? 'Codes cycle until the other phone has the full plan. Turn up brightness and hold steady. Pause if they need more time on one code.'
-          : 'Have the other person open Receive Plan and scan this code. Turn up screen brightness and hold the phones steady.'}
+          ? 'Codes cycle until the other phone has the plan. Turn up brightness and hold steady. Pause if they need more time on one code.'
+          : 'Have the other person open Receive Plan and scan this code. Turn up screen brightness and hold the phones steady.'}{' '}
+        Tracking and Active dogs go across, with the last {QR_LOG_DAYS} days
+        of care logs. Away dogs stay on this phone.
       </p>
       {error ? (
         <p className="mt-4 text-sm text-red-600">{error}</p>
@@ -178,7 +181,7 @@ function SharePlanDialog({ open, onClose }) {
 }
 
 function ReceivePlanDialog({ open, onClose }) {
-  const { dispatch } = useApp()
+  const { dispatch, dogs } = useApp()
   const [error, setError] = useState('')
   const [pendingPlan, setPendingPlan] = useState(null)
   const [cameraReady, setCameraReady] = useState(false)
@@ -276,10 +279,17 @@ function ReceivePlanDialog({ open, onClose }) {
     onClose()
   }
 
-  function confirmImport() {
+  function confirmImport(mode) {
     if (!pendingPlan) return
-    dispatch({ type: 'REPLACE_ALL', payload: pendingPlan })
-    track('import_plan', { result: 'Imported' })
+    if (mode === 'add') {
+      dispatch({ type: 'MERGE_PLAN', payload: pendingPlan })
+    } else {
+      dispatch({ type: 'REPLACE_ALL', payload: pendingPlan })
+    }
+    track('import_plan', {
+      result: 'Imported',
+      apply: mode === 'add' ? 'add' : 'replace',
+    })
     close()
   }
 
@@ -291,12 +301,14 @@ function ReceivePlanDialog({ open, onClose }) {
         : summary.dogNames.length === 1
           ? summary.dogNames[0]
           : `${summary.dogNames[0]} + ${summary.dogNames.length - 1} more`
+    const hasPack = (dogs ?? []).length > 0
 
     return (
-      <Modal open={open} title="Replace everything?" onClose={close}>
+      <Modal open={open} title="Apply this plan?" onClose={close}>
         <p className="text-sm text-slate-500">
-          This will overwrite dogs, catalog, menus, care logs, and account
-          details on this device.
+          {hasPack
+            ? 'Add these dogs to your pack, or replace everything on this device.'
+            : 'Add these dogs to start your pack, or replace everything on this device.'}
         </p>
         <ul className="mt-4 space-y-2 rounded-2xl bg-[#FBF9F5] p-4 text-sm text-slate-700">
           <li>
@@ -317,12 +329,20 @@ function ReceivePlanDialog({ open, onClose }) {
           </li>
           {summary.hasOwner ? (
             <li>
-              <span className="font-semibold">Owner account:</span> included
+              <span className="font-semibold">Owner account:</span> included on
+              replace
             </li>
           ) : null}
         </ul>
         <div className="mt-4 flex flex-col gap-2">
-          <Button className="w-full" onClick={confirmImport}>
+          <Button className="w-full" onClick={() => confirmImport('add')}>
+            Add to my pack
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={() => confirmImport('replace')}
+          >
             Replace my plan
           </Button>
           <Button

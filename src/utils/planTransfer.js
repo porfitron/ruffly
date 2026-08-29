@@ -3,8 +3,10 @@ import {
   DEFAULT_APP_DATA,
   pantryFromCatalog,
   pantryFoodToCatalogItem,
+  createId,
 } from './storage'
-import { dogPresence, DOG_PRESENCE } from './dogs'
+import { dogPresence, DOG_PRESENCE, isDogAway, uniqueDogSlug } from './dogs'
+import { addLocalDays } from './todayCare'
 
 function pantryForTransfer(state) {
   if (Array.isArray(state.pantry) && state.pantry.length > 0) return state.pantry
@@ -19,8 +21,164 @@ export const PLAN_QR_PREFIX_V3 = 'ruffly3:'
 export const QR_CHUNK_CHARS = 240
 /** Slow enough for html5-qrcode to lock onto each frame. */
 export const QR_CYCLE_MS = 400
+/** Care logs included in a QR export: today plus this many prior local days. */
+export const QR_LOG_DAYS = 3
 /** Compressed payload ceiling — enough for catalogs, menus, and care logs. */
 export const MAX_PLAN_COMPRESSED_BYTES = 128 * 1024
+
+function pickByDogId(byId, dogIds) {
+  if (!byId || typeof byId !== 'object') return {}
+  const next = {}
+  for (const [dogId, value] of Object.entries(byId)) {
+    if (dogIds.has(dogId)) next[dogId] = value
+  }
+  return next
+}
+
+/**
+ * QR exports skip Away dogs (and their menus/logs) and keep only recent
+ * care logs so phone-to-phone codes stay smaller / fewer frames.
+ */
+export function sliceStateForQr(state, now = new Date()) {
+  const dogs = (state.dogs ?? []).filter((dog) => !isDogAway(dog))
+  const dogIds = new Set(dogs.map((dog) => dog.id))
+  const cutoff = addLocalDays(now, 1 - QR_LOG_DAYS)
+
+  const logs = (state.logs ?? []).filter((log) => {
+    if (log.dogId && !dogIds.has(log.dogId)) return false
+    if (!log.loggedAt) return false
+    const at = new Date(log.loggedAt)
+    if (Number.isNaN(at.getTime())) return false
+    return at.getTime() >= cutoff.getTime()
+  })
+
+  let activeDogId = state.activeDogId ?? null
+  if (activeDogId && !dogIds.has(activeDogId)) {
+    activeDogId = dogs[0]?.id ?? null
+  }
+
+  return {
+    ...state,
+    dogs,
+    logs,
+    activeDogId,
+    menusByDogId: pickByDogId(state.menusByDogId, dogIds),
+    mealPlansByDogId: pickByDogId(state.mealPlansByDogId, dogIds),
+  }
+}
+
+function catalogItemsFromPlan(plan) {
+  if (Array.isArray(plan.catalog) && plan.catalog.length > 0) {
+    return plan.catalog.filter((item) => item?.id)
+  }
+  return pantryForTransfer(plan)
+    .map((food) => pantryFoodToCatalogItem(food))
+    .filter((item) => item?.id)
+}
+
+function collectMenuIds(menusByDogId) {
+  const used = new Set()
+  for (const items of Object.values(menusByDogId ?? {})) {
+    for (const item of items ?? []) {
+      if (item?.id) used.add(item.id)
+    }
+  }
+  return used
+}
+
+function allocateId(prefix, used) {
+  let id
+  do {
+    id = createId(prefix)
+  } while (used.has(id))
+  used.add(id)
+  return id
+}
+
+function takeUniqueId(id, used, prefix) {
+  if (id && !used.has(id)) {
+    used.add(id)
+    return id
+  }
+  return allocateId(prefix, used)
+}
+
+/**
+ * Append incoming dogs (plus their menus, recent logs, and any new catalog
+ * items) onto the current pack. Account details and existing dogs stay put.
+ * Incoming dogs already on this device (same id) are skipped so a re-scan
+ * does not duplicate them.
+ */
+export function mergePlanIntoState(current, incoming) {
+  const currentDogs = current?.dogs ?? []
+  const dogs = [...currentDogs]
+  const existingDogIds = new Set(dogs.map((dog) => dog.id))
+  const addedIds = new Set()
+
+  for (const dog of incoming?.dogs ?? []) {
+    if (!dog?.id || existingDogIds.has(dog.id)) continue
+    const slug = uniqueDogSlug(dog.name, dogs, dog.id)
+    dogs.push({ ...dog, slug })
+    existingDogIds.add(dog.id)
+    addedIds.add(dog.id)
+  }
+
+  const catalog = [...(current?.catalog ?? [])]
+  const catalogIds = new Set(catalog.map((item) => item.id).filter(Boolean))
+  for (const item of catalogItemsFromPlan(incoming ?? {})) {
+    if (catalogIds.has(item.id)) continue
+    catalog.push(item)
+    catalogIds.add(item.id)
+  }
+
+  const menusByDogId = { ...(current?.menusByDogId ?? {}) }
+  const usedMenuIds = collectMenuIds(menusByDogId)
+  const menuIdMap = new Map()
+  for (const [dogId, items] of Object.entries(incoming?.menusByDogId ?? {})) {
+    if (!addedIds.has(dogId)) continue
+    menusByDogId[dogId] = (items ?? []).map((item) => {
+      const nextId = takeUniqueId(item?.id, usedMenuIds, 'menu')
+      if (item?.id) menuIdMap.set(item.id, nextId)
+      return { ...item, id: nextId }
+    })
+  }
+
+  const mealPlansByDogId = { ...(current?.mealPlansByDogId ?? {}) }
+  for (const [dogId, plan] of Object.entries(incoming?.mealPlansByDogId ?? {})) {
+    if (!addedIds.has(dogId)) continue
+    mealPlansByDogId[dogId] = plan ?? []
+  }
+
+  const usedLogIds = new Set(
+    (current?.logs ?? []).map((log) => log.id).filter(Boolean),
+  )
+  const extraLogs = []
+  for (const log of incoming?.logs ?? []) {
+    if (!log?.dogId || !addedIds.has(log.dogId)) continue
+    extraLogs.push({
+      ...log,
+      id: takeUniqueId(log.id, usedLogIds, 'log'),
+      menuItemId: log.menuItemId
+        ? (menuIdMap.get(log.menuItemId) ?? log.menuItemId)
+        : log.menuItemId,
+    })
+  }
+
+  const keepActive =
+    current?.activeDogId &&
+    dogs.some((dog) => dog.id === current.activeDogId)
+
+  return {
+    ...current,
+    dogs,
+    catalog,
+    menusByDogId,
+    mealPlansByDogId,
+    logs: [...(current?.logs ?? []), ...extraLogs],
+    activeDogId: keepActive ? current.activeDogId : (dogs[0]?.id ?? null),
+    packOrder: 'manual',
+  }
+}
 
 function trimCareInfo(careInfo) {
   if (!careInfo || typeof careInfo !== 'object') return null
@@ -550,14 +708,20 @@ export function encodePlanForQr(state) {
 }
 
 function encodePlanSnapshot(state) {
+  const sliced = sliceStateForQr(state)
+  if ((sliced.dogs ?? []).length === 0) {
+    throw new Error(
+      'No tracking or active dogs to share. Set a dog to Tracking or Active first.',
+    )
+  }
   const omittedPhotos =
-    (state.dogs ?? []).some((dog) => isDataUrl(dog.photoUrl)) ||
-    isDataUrl(state.ownerAccount?.photoUrl)
+    sliced.dogs.some((dog) => isDataUrl(dog.photoUrl)) ||
+    isDataUrl(sliced.ownerAccount?.photoUrl)
   // JPEG data URLs barely compress and dominate QR frame count — leave them off.
-  const compressed = compressPlan(state, { includePhotos: false })
+  const compressed = compressPlan(sliced, { includePhotos: false })
   if (compressed.byteLength > MAX_PLAN_COMPRESSED_BYTES) {
     throw new Error(
-      'This plan is too large to share. Try removing old care logs.',
+      'This plan is too large to share. Try removing catalog items you don’t need.',
     )
   }
   return {
