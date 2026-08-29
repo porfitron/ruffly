@@ -24,6 +24,69 @@ function preferredDogId(dogs, preferredId) {
   return dogs[0]?.id ?? null
 }
 
+function preferredDogIds(dogs, preferredId) {
+  const id = preferredDogId(dogs, preferredId)
+  return id ? [id] : []
+}
+
+function toggleDogId(ids, id) {
+  if (ids.includes(id)) {
+    if (ids.length <= 1) return ids
+    return ids.filter((value) => value !== id)
+  }
+  return [...ids, id]
+}
+
+function formatPackNames(dogs) {
+  const names = (dogs ?? []).map((dog) => dog?.name?.trim() || 'Pup')
+  if (names.length === 0) return 'Pup'
+  if (names.length === 1) return names[0]
+  if (names.length === 2) return `${names[0]} & ${names[1]}`
+  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`
+}
+
+function stackAvatarSize(count) {
+  if (count >= 5) return 'sm'
+  if (count >= 3) return 'lg'
+  return 'xl'
+}
+
+function stackOverlapClass(size) {
+  if (size === 'xl') return '-ml-5'
+  if (size === 'lg') return '-ml-4'
+  return '-ml-3'
+}
+
+function AvatarStack({ dogs, size = 'sm' }) {
+  const pack = dogs ?? []
+  const overlap = stackOverlapClass(size)
+  const outline =
+    pack.length > 1
+      ? size === 'sm'
+        ? 'ring-2 ring-white'
+        : 'ring-[3px] ring-white'
+      : ''
+
+  return (
+    <div className="flex shrink-0 items-center">
+      {pack.map((dog, i) => (
+        <div
+          key={dog.id}
+          className={`relative ${i > 0 ? overlap : ''}`}
+          style={{ zIndex: i + 1 }}
+        >
+          <DogAvatar
+            name={dog.name}
+            photoUrl={dog.photoUrl}
+            size={size}
+            className={outline}
+          />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function SpeechBubble({ children }) {
   return (
     <div className="relative min-w-0 flex-1">
@@ -35,7 +98,7 @@ function SpeechBubble({ children }) {
         className="absolute -left-[6px] top-3 h-0 w-0 border-y-[7px] border-r-[8px] border-y-transparent border-r-white"
         aria-hidden
       />
-      <div className="rounded-2xl rounded-tl-md border border-amber-200 bg-white px-3.5 py-2.5 text-sm leading-snug break-words whitespace-pre-wrap text-slate-800">
+      <div className="overflow-hidden rounded-2xl rounded-tl-md border border-amber-200 bg-white px-3.5 py-2.5 text-sm leading-snug wrap-break-word whitespace-pre-wrap text-slate-800 [overflow-wrap:anywhere]">
         {children}
       </div>
     </div>
@@ -56,8 +119,10 @@ function formatFleamailStamp(day = new Date()) {
   return `${date} · ${time}`
 }
 
-function FleamailShareCard({ dog, message, sentAt, cardRef }) {
-  const name = dog?.name?.trim() || 'Pup'
+function FleamailShareCard({ dogs, message, sentAt, cardRef }) {
+  const pack = dogs ?? []
+  const names = formatPackNames(pack)
+  const avatarSize = stackAvatarSize(pack.length)
   return (
     <div
       ref={cardRef}
@@ -65,27 +130,25 @@ function FleamailShareCard({ dog, message, sentAt, cardRef }) {
       style={{ backgroundColor: CREAM }}
     >
       <div className="flex items-center gap-3">
-        <BrandMark className="h-10 w-10" />
-        <div className="min-w-0">
-          <p className="whitespace-nowrap text-sm font-extrabold leading-5 text-[#F59E0B]">
-            Ruffly
-          </p>
-          <p className="whitespace-nowrap text-xs leading-5 text-slate-500">
-            Fleamail from {name}
-          </p>
-        </div>
+        <BrandMark className="h-10 w-10 shrink-0" />
+        <p className="whitespace-nowrap text-sm font-extrabold leading-5 text-[#F59E0B]">
+          Ruffly
+        </p>
       </div>
+      <p className="mt-1 whitespace-nowrap text-xs leading-5 text-slate-500">
+        Fleamail from {names}
+      </p>
 
       <div className="mt-6 flex items-start gap-3">
-        <DogAvatar name={name} photoUrl={dog?.photoUrl} size="xl" />
+        <AvatarStack dogs={pack} size={avatarSize} />
         <div className="min-w-0 flex-1 pt-1">
-          <p className="mb-1.5 text-sm font-bold text-slate-800">{name}</p>
+          <p className="mb-1.5 text-sm font-bold text-slate-800">{names}</p>
           <SpeechBubble>{message}</SpeechBubble>
-          <p className="mt-1.5 text-[11px] leading-4 text-slate-400">
-            {formatFleamailStamp(sentAt)}
-          </p>
         </div>
       </div>
+      <p className="mt-1.5 whitespace-nowrap text-right text-[11px] leading-4 text-slate-400">
+        {formatFleamailStamp(sentAt)}
+      </p>
 
       <p className="pt-6 text-center text-xs leading-5 text-slate-400">
         Shared from Ruffly.app
@@ -94,26 +157,42 @@ function FleamailShareCard({ dog, message, sentAt, cardRef }) {
   )
 }
 
-function recordFleamailSent(dispatch, dog, message, sentAt) {
-  if (!dispatch || !dog?.id) return
-  dispatch({
-    type: 'ADD_LOG',
-    payload: {
-      dogId: dog.id,
-      kind: 'fleamail',
-      note: message,
-      loggedAt:
-        sentAt instanceof Date ? sentAt.toISOString() : sentAt || new Date().toISOString(),
-    },
-  })
+function recordFleamailSent(dispatch, dogs, message, sentAt) {
+  if (!dispatch) return
+  const loggedAt =
+    sentAt instanceof Date
+      ? sentAt.toISOString()
+      : sentAt || new Date().toISOString()
+  for (const dog of dogs ?? []) {
+    if (!dog?.id) continue
+    dispatch({
+      type: 'ADD_LOG',
+      payload: {
+        dogId: dog.id,
+        kind: 'fleamail',
+        note: message,
+        loggedAt,
+      },
+    })
+  }
 }
 
-function fleamailFilename(name) {
+function fleamailFilename(dogs) {
   const day = new Date()
   const y = day.getFullYear()
   const m = String(day.getMonth() + 1).padStart(2, '0')
   const d = String(day.getDate()).padStart(2, '0')
-  const base = slugifyName(name) || 'pup'
+  const slugs = (dogs ?? [])
+    .map((dog) => slugifyName(dog?.name))
+    .filter(Boolean)
+  const base =
+    slugs.length === 0
+      ? 'pup'
+      : slugs.length === 1
+        ? slugs[0]
+        : slugs.length <= 3
+          ? slugs.join('-')
+          : 'pack'
   return `ruffly-fleamail-${base}-${y}-${m}-${d}.png`
 }
 
@@ -123,8 +202,8 @@ export default function FleamailSheet({ open, onClose }) {
   // Same order as Pack, including dogs marked away.
   const pack = dogs ?? []
   const cardRef = useRef(null)
-  const [dogId, setDogId] = useState(() =>
-    preferredDogId(pack, activeDogId),
+  const [dogIds, setDogIds] = useState(() =>
+    preferredDogIds(pack, activeDogId),
   )
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
@@ -132,13 +211,13 @@ export default function FleamailSheet({ open, onClose }) {
   const [pendingShare, setPendingShare] = useState(null)
   const [error, setError] = useState('')
 
-  const dog = pack.find((d) => d.id === dogId) ?? pack[0] ?? null
+  const selectedDogs = pack.filter((d) => dogIds.includes(d.id))
   const trimmed = message.trim()
-  const canSend = Boolean(dog) && trimmed.length > 0 && !sending
+  const canSend = selectedDogs.length > 0 && trimmed.length > 0 && !sending
 
   useEffect(() => {
     if (!open) return
-    setDogId(preferredDogId(pack, activeDogId))
+    setDogIds(preferredDogIds(pack, activeDogId))
     setMessage('')
     setSending(false)
     setSentAt(new Date())
@@ -149,7 +228,7 @@ export default function FleamailSheet({ open, onClose }) {
   }, [open])
 
   async function handleSend() {
-    if (!canSend || !dog) return
+    if (!canSend) return
     setError('')
     setPendingShare(null)
     const stampedAt = new Date()
@@ -162,7 +241,7 @@ export default function FleamailSheet({ open, onClose }) {
     })
     try {
       const result = await shareCardScreenshot(cardRef.current, {
-        filename: fleamailFilename(dog.name),
+        filename: fleamailFilename(selectedDogs),
         scale: 3,
       })
       if (result?.status === 'needs-gesture') {
@@ -172,8 +251,11 @@ export default function FleamailSheet({ open, onClose }) {
         track('send_fleamail', { result: 'Cancelled' })
         // Stay in the composer so they can try again.
       } else {
-        recordFleamailSent(dispatch, dog, trimmed, stampedAt)
-        track('send_fleamail', { result: shareResultLabel(result?.status) })
+        recordFleamailSent(dispatch, selectedDogs, trimmed, stampedAt)
+        track('send_fleamail', {
+          result: shareResultLabel(result?.status),
+          item_count: selectedDogs.length,
+        })
         onClose?.()
       }
     } catch (err) {
@@ -192,9 +274,12 @@ export default function FleamailSheet({ open, onClose }) {
     if (!payload) return
     sharePreparedLog(payload)
       .then((status) => {
-        recordFleamailSent(dispatch, dog, trimmed, sentAt)
+        recordFleamailSent(dispatch, selectedDogs, trimmed, sentAt)
         setPendingShare(null)
-        track('send_fleamail', { result: shareResultLabel(status) })
+        track('send_fleamail', {
+          result: shareResultLabel(status),
+          item_count: selectedDogs.length,
+        })
         onClose?.()
       })
       .catch((err) => {
@@ -220,7 +305,7 @@ export default function FleamailSheet({ open, onClose }) {
             Preparing Fleamail…
           </p>
           <FleamailShareCard
-            dog={dog}
+            dogs={selectedDogs}
             message={trimmed}
             sentAt={sentAt}
             cardRef={cardRef}
@@ -252,15 +337,25 @@ export default function FleamailSheet({ open, onClose }) {
         ) : (
           <>
             <p className="mb-4 text-sm text-slate-500">
-              Write a short note as your pup — we’ll attach it as a photo.
+              {pack.length > 1
+                ? 'Write a short note as your pup — tap more than one to send it together.'
+                : 'Write a short note as your pup — we’ll attach it as a photo.'}
             </p>
 
             <div className="max-h-[70vh] space-y-4 overflow-y-auto">
               {pack.length > 1 ? (
-                <Field label="From">
-                  <ul className="mt-1 space-y-1" role="listbox" aria-label="Dog">
+                <Field
+                  label="From"
+                  hint="Tap to add or remove dogs."
+                >
+                  <ul
+                    className="mt-1 space-y-1"
+                    role="listbox"
+                    aria-label="Dogs"
+                    aria-multiselectable="true"
+                  >
                     {pack.map((d) => {
-                      const selected = d.id === dog?.id
+                      const selected = dogIds.includes(d.id)
                       const away = isDogAway(d)
                       const name = d.name?.trim() || 'Unnamed'
                       return (
@@ -269,7 +364,9 @@ export default function FleamailSheet({ open, onClose }) {
                             type="button"
                             role="option"
                             aria-selected={selected}
-                            onClick={() => setDogId(d.id)}
+                            onClick={() =>
+                              setDogIds((ids) => toggleDogId(ids, d.id))
+                            }
                             className={`flex w-full items-center gap-3 rounded-2xl px-2 py-2.5 text-left transition-colors ${
                               selected
                                 ? 'bg-amber-50 ring-1 ring-amber-200'
@@ -299,12 +396,12 @@ export default function FleamailSheet({ open, onClose }) {
               ) : (
                 <div className="flex items-center gap-3">
                   <DogAvatar
-                    name={dog?.name}
-                    photoUrl={dog?.photoUrl}
+                    name={selectedDogs[0]?.name}
+                    photoUrl={selectedDogs[0]?.photoUrl}
                     size="sm"
                   />
                   <p className="text-sm font-semibold text-slate-800">
-                    From {dog?.name?.trim() || 'your pup'}
+                    From {selectedDogs[0]?.name?.trim() || 'your pup'}
                   </p>
                 </div>
               )}
@@ -325,13 +422,9 @@ export default function FleamailSheet({ open, onClose }) {
                 />
               </Field>
 
-              {trimmed ? (
+              {trimmed && selectedDogs.length > 0 ? (
                 <div className="flex items-start gap-3 rounded-2xl bg-[#FBF9F5] px-3 py-3">
-                  <DogAvatar
-                    name={dog?.name}
-                    photoUrl={dog?.photoUrl}
-                    size="sm"
-                  />
+                  <AvatarStack dogs={selectedDogs} size="sm" />
                   <SpeechBubble>{trimmed}</SpeechBubble>
                 </div>
               ) : null}

@@ -6,10 +6,12 @@ import {
   ChevronRight,
   Circle,
   GripVertical,
+  MessageCircle,
   Minus,
   PawPrint,
   Plus,
   Share,
+  X,
 } from 'lucide-react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
@@ -113,7 +115,7 @@ function taskAmount(task) {
 function taskSubtitle(task) {
   const amount = taskAmount(task)
   const note = task.note?.trim().replace(/\s+/g, ' ')
-  if (task.kind === 'note') {
+  if (task.kind === 'note' || task.kind === 'fleamail') {
     const parts = [formatLogTime(task.doneAt)]
     if (note && note !== task.name) parts.push(note)
     return parts.filter(Boolean).join(' · ')
@@ -138,6 +140,17 @@ function NoteMark({ label, onClick }) {
     >
       <span aria-hidden>📝</span>
     </button>
+  )
+}
+
+function FleamailMark() {
+  return (
+    <span
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#F59E0B] ring-1 ring-amber-200"
+      aria-hidden
+    >
+      <MessageCircle size={20} strokeWidth={2.25} />
+    </span>
   )
 }
 
@@ -207,17 +220,37 @@ function ReorderGrip({ name, dragging, handleProps }) {
   )
 }
 
+function FleamailDeleteButton({ name, onClick }) {
+  return (
+    <button
+      type="button"
+      className="share-hide flex h-11 w-8 shrink-0 items-center justify-center text-slate-300 hover:text-red-500"
+      aria-label={`Delete ${name}`}
+      onClick={onClick}
+    >
+      <X size={18} strokeWidth={2.5} aria-hidden />
+    </button>
+  )
+}
+
+function isFleamailRow(row) {
+  return row?.type === 'item' && row.task?.kind === 'fleamail'
+}
+
 function TaskRow({
   task,
   dogName,
   onDone,
   onUndo,
   onEdit,
+  onDelete,
   rowRef,
   dragging = false,
   reorderHandle = null,
 }) {
   const isNote = task.kind === 'note'
+  const isFleamail = task.kind === 'fleamail'
+  const isLogOnly = isNote || isFleamail
   const who = dogName ? `${dogName}’s ` : ''
   return (
     <li
@@ -225,7 +258,7 @@ function TaskRow({
       className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 transition-colors ${
         dragging
           ? 'relative z-10 scale-[1.02] border-[#F59E0B]/40 bg-white shadow-lg'
-          : task.done && !isNote
+          : task.done && !isLogOnly
             ? 'border-emerald-100 bg-emerald-50/60'
             : 'border-amber-100 bg-[#FBF9F5]'
       }`}
@@ -235,6 +268,8 @@ function TaskRow({
           label={`Edit note ${who}${task.name}`}
           onClick={() => onEdit?.(task)}
         />
+      ) : isFleamail ? (
+        <FleamailMark />
       ) : (
         <CheckButton
           done={task.done}
@@ -263,17 +298,26 @@ function TaskRow({
         <div className="min-w-0 flex-1">
           <p
             className={`truncate text-sm font-semibold ${
-              task.done ? 'text-slate-500 line-through' : 'text-slate-800'
+              task.done && !isFleamail ? 'text-slate-500 line-through' : 'text-slate-800'
             }`}
           >
             {taskTitle(task)}
           </p>
-          <p className="truncate text-xs text-slate-400">
+          <p
+            className={`${isFleamail ? 'line-clamp-2' : 'truncate'} text-xs text-slate-400`}
+          >
             {taskSubtitle(task)}
           </p>
         </div>
       )}
-      {reorderHandle}
+      {isFleamail && onDelete ? (
+        <FleamailDeleteButton
+          name={who ? `${who}${task.name}` : task.name}
+          onClick={() => onDelete(task)}
+        />
+      ) : (
+        reorderHandle
+      )}
     </li>
   )
 }
@@ -400,6 +444,7 @@ function TodayTaskRow({
   onItemDone,
   onItemUndo,
   onItemEdit,
+  onItemDelete,
   rowRef,
   dragging,
   reorderHandle,
@@ -427,6 +472,7 @@ function TodayTaskRow({
       onDone={onItemDone}
       onUndo={onItemUndo}
       onEdit={onItemEdit}
+      onDelete={onItemDelete}
       rowRef={rowRef}
       dragging={dragging}
       reorderHandle={reorderHandle}
@@ -490,6 +536,7 @@ function SlotSection({
   onItemDone,
   onItemUndo,
   onItemEdit,
+  onItemDelete,
 }) {
   const subtitle =
     section.checkableCount > 0 && section.dueCount === 0
@@ -545,6 +592,7 @@ function SlotSection({
                     onItemDone={onItemDone}
                     onItemUndo={onItemUndo}
                     onItemEdit={onItemEdit}
+                    onItemDelete={onItemDelete}
                   />
                 ))}
               </ul>
@@ -565,6 +613,7 @@ function DogTodayTaskList({
   onItemDone,
   onItemUndo,
   onItemEdit,
+  onItemDelete,
 }) {
   const { dispatch } = useApp()
   const movable = rows.filter((row) => todayRowKey(row) != null)
@@ -572,7 +621,11 @@ function DogTodayTaskList({
   const ids = movable.map((row) => row.id)
   const canReorder =
     canReorderRows &&
-    movable.some((row) => isTodayDailyRow(row) || isTodayQuickLogRow(row)) &&
+    movable.some(
+      (row) =>
+        isTodayDailyRow(row) ||
+        (isTodayQuickLogRow(row) && !isFleamailRow(row)),
+    ) &&
     movable.length > 1
   const { currentIds, draggingId, setItemRef, bindHandle } = useHoldReorder({
     ids,
@@ -602,10 +655,12 @@ function DogTodayTaskList({
           onItemDone={onItemDone}
           onItemUndo={onItemUndo}
           onItemEdit={onItemEdit}
+          onItemDelete={onItemDelete}
           rowRef={(node) => setItemRef(row.id, node)}
           dragging={row.id === draggingId}
           reorderHandle={
             canReorder &&
+            !isFleamailRow(row) &&
             (isTodayDailyRow(row) || isTodayQuickLogRow(row)) ? (
               <ReorderGrip
                 name={row.task.name}
@@ -625,6 +680,7 @@ function DogTodayTaskList({
           onItemDone={onItemDone}
           onItemUndo={onItemUndo}
           onItemEdit={onItemEdit}
+          onItemDelete={onItemDelete}
         />
       ))}
     </ul>
@@ -699,6 +755,7 @@ function DogTodayCard({
   onItemDone,
   onItemUndo,
   onItemEdit,
+  onItemDelete,
   cardRef,
 }) {
   const subtitle = !followsPlan
@@ -772,6 +829,7 @@ function DogTodayCard({
             onItemDone={onItemDone}
             onItemUndo={onItemUndo}
             onItemEdit={onItemEdit}
+            onItemDelete={onItemDelete}
           />
         ) : followsPlan && !hasMenu ? (
           <p className="rounded-2xl bg-[#FBF9F5] px-3 py-3 text-sm text-slate-500">
@@ -815,6 +873,7 @@ export default function TodayView({
   const [sharing, setSharing] = useState(false)
   const [shareError, setShareError] = useState('')
   const [pendingShare, setPendingShare] = useState(null)
+  const [fleamailToDelete, setFleamailToDelete] = useState(null)
   const viewingToday = isSameLocalDay(viewingDay)
   const groups = buildPackTodayTasks(
     dogs,
@@ -951,7 +1010,7 @@ export default function TodayView({
   }
 
   function logTask(task) {
-    if (task.kind === 'note') return
+    if (task.kind === 'note' || task.kind === 'fleamail') return
     const careItem = (catalog ?? []).find((c) => c.id === task.careItemId)
     const amount = task.amount
     const kcal =
@@ -985,7 +1044,7 @@ export default function TodayView({
   }
 
   function handleUndo(task) {
-    if (task.kind === 'note') return
+    if (task.kind === 'note' || task.kind === 'fleamail') return
     if (task.doneLogId) {
       dispatch({ type: 'DELETE_LOG', payload: task.doneLogId })
       track('undo_routine', {
@@ -999,6 +1058,19 @@ export default function TodayView({
     if (task?.kind !== 'note' || !task.doneLogId) return
     const log = (logs ?? []).find((entry) => entry.id === task.doneLogId)
     if (log) onEditLog?.(log)
+  }
+
+  function handleAskDeleteFleamail(task) {
+    if (task?.kind !== 'fleamail' || !task.doneLogId) return
+    setFleamailToDelete(task)
+  }
+
+  function confirmDeleteFleamail() {
+    const task = fleamailToDelete
+    if (!task?.doneLogId) return
+    dispatch({ type: 'DELETE_LOG', payload: task.doneLogId })
+    track('delete_log_entry', { item_kind: 'Fleamail', method: 'Today log' })
+    setFleamailToDelete(null)
   }
 
   function handleMealDone(meal) {
@@ -1131,6 +1203,40 @@ export default function TodayView({
         </Button>
       </Modal>
 
+      <Modal
+        open={Boolean(fleamailToDelete)}
+        title="Delete Fleamail?"
+        onClose={() => setFleamailToDelete(null)}
+      >
+        <p className="text-sm text-slate-500">
+          Remove this Fleamail
+          {fleamailToDelete?.dogName
+            ? ` from ${fleamailToDelete.dogName}’s log`
+            : ''}
+          ? This cannot be undone.
+        </p>
+        {fleamailToDelete?.note?.trim() ? (
+          <p className="mt-3 rounded-2xl bg-[#FBF9F5] px-3 py-2.5 text-sm leading-snug text-slate-700">
+            {fleamailToDelete.note.trim()}
+          </p>
+        ) : null}
+        <div className="mt-4 flex flex-col gap-2">
+          <Button
+            className="w-full !h-11 !bg-red-500 hover:!bg-red-600"
+            onClick={confirmDeleteFleamail}
+          >
+            Delete Fleamail
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full !h-11"
+            onClick={() => setFleamailToDelete(null)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </Modal>
+
       <div
         data-sharing={sharing ? 'true' : undefined}
         className="space-y-4"
@@ -1194,6 +1300,7 @@ export default function TodayView({
                   onItemDone={handleDone}
                   onItemUndo={handleUndo}
                   onItemEdit={handleEditNote}
+                  onItemDelete={handleAskDeleteFleamail}
                 />
               </li>
             ))}
@@ -1219,6 +1326,7 @@ export default function TodayView({
                   onItemDone={handleDone}
                   onItemUndo={handleUndo}
                   onItemEdit={handleEditNote}
+                  onItemDelete={handleAskDeleteFleamail}
                   cardRef={(node) => setDogCardRef(group.dog.id, node)}
                 />
               ))}
@@ -1246,6 +1354,7 @@ export default function TodayView({
             onItemDone={handleDone}
             onItemUndo={handleUndo}
             onItemEdit={handleEditNote}
+            onItemDelete={handleAskDeleteFleamail}
             cardRef={(node) => setDogCardRef(group.dog.id, node)}
           />
         ))}

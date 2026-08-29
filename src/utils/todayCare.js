@@ -175,7 +175,25 @@ function sortMealItems(a, b) {
   })
 }
 
-const QUICK_LOG_KINDS = new Set(['food', 'weight', 'activity', 'note'])
+const QUICK_LOG_KINDS = new Set([
+  'food',
+  'weight',
+  'activity',
+  'note',
+  'fleamail',
+])
+const LOG_ONLY_KINDS = new Set(['note', 'fleamail'])
+
+const SLOT_DEFAULT_HOUR = {
+  breakfast: 8,
+  morning: 8,
+  midday: 12,
+  lunch: 12,
+  afternoon: 15,
+  evening: 18,
+  dinner: 18,
+  night: 21,
+}
 
 /** Stable key for persisting Today row order (meals, planned items, + logs). */
 export function todayRowKey(row) {
@@ -208,11 +226,82 @@ export function todayRowIsDone(row) {
   return row.type === 'meal' ? Boolean(row.done) : Boolean(row.task?.done)
 }
 
-/** Menu / checkable care — notes sit on Today but are not due or done. */
+/** Menu / checkable care — notes and fleamails sit on Today but are not due. */
 export function isTodayCheckableRow(row) {
   if (!row) return false
   if (row.type === 'meal') return true
-  return row.task?.kind !== 'note'
+  return !LOG_ONLY_KINDS.has(row.task?.kind)
+}
+
+function isFleamailRow(row) {
+  return row?.type === 'item' && row.task?.kind === 'fleamail'
+}
+
+function timestampMs(isoOrDate) {
+  if (!isoOrDate) return null
+  const t = new Date(isoOrDate).getTime()
+  return Number.isFinite(t) ? t : null
+}
+
+function defaultSlotAnchorMs(slot, day) {
+  const hour = SLOT_DEFAULT_HOUR[String(slot ?? '').toLowerCase()]
+  if (hour == null) return null
+  const d = startOfLocalDay(day)
+  d.setHours(hour, 0, 0, 0)
+  return d.getTime()
+}
+
+/** When the meal happened, or a typical time for that slot if it isn’t logged yet. */
+function mealAnchorMs(row, day) {
+  if (row?.type !== 'meal') return null
+  const times = (row.items ?? [])
+    .map((item) => timestampMs(item.doneAt))
+    .filter((t) => t != null)
+  if (times.length) return Math.min(...times)
+  return defaultSlotAnchorMs(row.slot, day)
+}
+
+function extraLoggedMs(row) {
+  return timestampMs(row?.task?.doneAt)
+}
+
+/**
+ * Place fleamails in the Before / After breakfast or dinner gap that matches
+ * when they were sent, using logged meal times when present.
+ */
+function insertFleamailsByMealTime(rows, extras, day = new Date()) {
+  if (!extras.length) return [...rows]
+  const result = [...rows]
+  const sorted = [...extras].sort((a, b) => {
+    const at = extraLoggedMs(a) ?? 0
+    const bt = extraLoggedMs(b) ?? 0
+    return at - bt
+  })
+  for (const extra of sorted) {
+    const t = extraLoggedMs(extra) ?? Date.now()
+    let insertAt = result.length
+    for (let i = 0; i < result.length; i += 1) {
+      const row = result[i]
+      if (row.type !== 'meal') continue
+      const anchor = mealAnchorMs(row, day)
+      if (anchor == null) continue
+      if (anchor > t) {
+        insertAt = i
+        break
+      }
+      insertAt = i + 1
+    }
+    while (
+      insertAt < result.length &&
+      result[insertAt].type !== 'meal' &&
+      isTodayQuickLogRow(result[insertAt]) &&
+      (extraLoggedMs(result[insertAt]) ?? 0) <= t
+    ) {
+      insertAt += 1
+    }
+    result.splice(insertAt, 0, extra)
+  }
+  return result
 }
 
 /** New + logs sit just above the first completed row until the user drags. */
@@ -224,7 +313,7 @@ function insertQuickLogsAboveCompleted(baseRows, extras) {
 }
 
 /** Apply a saved Today order; new rows stay in slot order after known ones. */
-export function applyTodayRowOrder(rows, todayRowOrder) {
+export function applyTodayRowOrder(rows, todayRowOrder, day = new Date()) {
   const pinned = []
   const movable = []
   for (const row of rows ?? []) {
@@ -247,9 +336,12 @@ export function applyTodayRowOrder(rows, todayRowOrder) {
 
   const leftovers = [...byKey.values()]
   const leftoverQuickLogs = leftovers.filter(isTodayQuickLogRow)
+  const leftoverFleamails = leftoverQuickLogs.filter(isFleamailRow)
+  const leftoverOtherQuick = leftoverQuickLogs.filter((row) => !isFleamailRow(row))
   const leftoverOther = leftovers.filter((row) => !isTodayQuickLogRow(row))
   const base = known.length > 0 ? [...known, ...leftoverOther] : leftoverOther
-  const ordered = insertQuickLogsAboveCompleted(base, leftoverQuickLogs)
+  const withQuick = insertQuickLogsAboveCompleted(base, leftoverOtherQuick)
+  const ordered = insertFleamailsByMealTime(withQuick, leftoverFleamails, day)
 
   return [...ordered, ...pinned]
 }
@@ -258,7 +350,7 @@ export function applyTodayRowOrder(rows, todayRowOrder) {
  * Collapse meal-time slots into one checkable row with component items.
  * Daily / as-needed stay as individual rows.
  */
-export function groupTodayTasks(tasks, todayRowOrder) {
+export function groupTodayTasks(tasks, todayRowOrder, day = new Date()) {
   const buckets = new Map()
   const standalone = []
 
@@ -298,7 +390,7 @@ export function groupTodayTasks(tasks, todayRowOrder) {
     return slotSortKey(aSlot) - slotSortKey(bSlot)
   })
 
-  return applyTodayRowOrder(rows, todayRowOrder)
+  return applyTodayRowOrder(rows, todayRowOrder, day)
 }
 
 /**
@@ -345,7 +437,9 @@ function extraTaskFromLog(dog, log, careItem, day = new Date()) {
         ? log.label || note || 'Activity'
         : kind === 'note'
           ? log.label?.trim() || 'Note'
-          : careItem?.formula || careItem?.name || note || kindLabel(kind)
+          : kind === 'fleamail'
+            ? kindLabel('fleamail')
+            : careItem?.formula || careItem?.name || note || kindLabel(kind)
 
   return {
     id: `${dog.id}:extra:${log.id}`,
@@ -364,7 +458,7 @@ function extraTaskFromLog(dog, log, careItem, day = new Date()) {
     slotLabel: isSameLocalDay(day) ? formatSlotLabel('extra') : 'Extra',
     amount: log.amount,
     unit: log.unit,
-    done: kind !== 'note',
+    done: !LOG_ONLY_KINDS.has(kind),
     doneAt: log.loggedAt ?? null,
     doneLogId: log.id,
     oneTime: true,
@@ -424,7 +518,6 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
     return at - bt
   })
   for (const log of extras) {
-    if (log.kind === 'fleamail') continue
     const careItem = log.careItemId ? byId.get(log.careItemId) : undefined
     tasks.push(extraTaskFromLog(dog, log, careItem, day))
   }
@@ -443,7 +536,7 @@ export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new
     const storedMenu = menusByDogId?.[dog.id] ?? []
     const menu = followsPlan ? storedMenu : []
     const tasks = buildDogTodayTasks(dog, menu, catalog, logs, day)
-    const rows = groupTodayTasks(tasks, dog.todayRowOrder)
+    const rows = groupTodayTasks(tasks, dog.todayRowOrder, day)
     const kcalLogged = foodKcalLoggedToday(logs, dog.id, day)
     groups.push({
       dog,
@@ -506,9 +599,15 @@ function uniqueSlotLabels(entries) {
   return labels
 }
 
+function isGenericExtraLabel(label) {
+  const raw = String(label ?? '').toLowerCase()
+  return raw === 'today only' || raw === 'extra'
+}
+
 function gapSectionLabel(key, entries, packMeals) {
   const labels = uniqueSlotLabels(entries)
-  if (labels.length === 1) return labels[0]
+  const onlyGeneric = labels.length === 1 && isGenericExtraLabel(labels[0])
+  if (labels.length === 1 && !onlyGeneric) return labels[0]
   if (key === 'start') {
     const firstMeal = packMeals[0]
     return firstMeal ? `Before ${formatSlotLabel(firstMeal)}` : labels.join(' · ')
