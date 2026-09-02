@@ -456,6 +456,8 @@ function reducer(state, action) {
       }
     case 'DISMISS_BADGE_PROMPT':
       return { ...state, badgePromptDismissed: true }
+    case 'DISMISS_IOS_INSTALL_HINT':
+      return { ...state, iosInstallHintDismissed: true }
     case 'SET_TRIP_SETTINGS':
       return {
         ...state,

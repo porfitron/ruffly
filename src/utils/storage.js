@@ -38,6 +38,7 @@ export const DEFAULT_APP_DATA = {
     userEmail: null,
   },
   badgePromptDismissed: false,
+  iosInstallHintDismissed: false,
   // Today list grouping: 'dog' | 'meal'. Only used when 2+ tracking dogs.
   todayGroupBy: 'dog',
   // Stored dogs[] order is the pack list. Seeded from tracking/away A–Z on first load.
@@ -616,6 +617,7 @@ export function normalizeAppData(raw) {
       ...(parsed.proTeaser ?? {}),
     },
     badgePromptDismissed: Boolean(parsed.badgePromptDismissed),
+    iosInstallHintDismissed: Boolean(parsed.iosInstallHintDismissed),
     todayGroupBy: parsed.todayGroupBy === 'meal' ? 'meal' : 'dog',
   }
 }

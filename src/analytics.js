@@ -80,6 +80,7 @@ const EVENT_CATALOG = {
   open_app: { label: 'Opened the app', group: 'App' },
   enable_home_badge: { label: 'Enabled home-screen badge', group: 'App' },
   dismiss_home_badge: { label: 'Dismissed home-screen badge', group: 'App' },
+  dismiss_ios_install: { label: 'Dismissed iOS Home Screen hint', group: 'App' },
   join_pro_waitlist: { label: 'Joined Pro waitlist', group: 'App' },
 }
 

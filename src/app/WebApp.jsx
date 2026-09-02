@@ -13,6 +13,7 @@ import FleamailSheet from '../components/log/FleamailSheet'
 import CatalogTab from '../components/catalog/CatalogTab'
 import CareGuideTab from '../components/trip/CareGuideTab'
 import HomeScreenBadgePrompt from '../components/layout/HomeScreenBadgePrompt'
+import IosInstallHint from '../components/layout/IosInstallHint'
 import MealCelebration from '../components/ui/MealCelebration'
 import About from '../pages/About'
 import { useApp } from '../context/AppContext'
@@ -179,6 +180,7 @@ export default function WebApp() {
       </div>
 
       <main className="space-y-4 px-4 print:space-y-0 print:px-0">
+        {activeTab === 'today' ? <IosInstallHint /> : null}
         {activeTab === 'today' ? <HomeScreenBadgePrompt /> : null}
         {activeTab === 'today' && (
           <TodayView
