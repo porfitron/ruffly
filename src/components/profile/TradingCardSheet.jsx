@@ -5,7 +5,6 @@ import Modal from '../ui/Modal'
 import Button from '../ui/Button'
 import BrandMark from '../ui/BrandMark'
 import DogAvatar from './DogAvatar'
-import { useApp } from '../../context/AppContext'
 import { slugifyName } from '../../utils/dogs'
 import {
   shareCardScreenshot,
@@ -38,11 +37,17 @@ function formatWeightLbs(dog) {
   return `${text} lbs`
 }
 
-function countFleamails(logs, dogId) {
-  if (!dogId) return 0
-  return (logs ?? []).filter(
-    (log) => log.dogId === dogId && log.kind === 'fleamail',
-  ).length
+function formatAge(dog) {
+  const n = Number(dog?.ageYears)
+  if (!Number.isFinite(n) || n < 0) return '—'
+  const text = Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10)
+  return n === 1 ? `${text} yr` : `${text} yrs`
+}
+
+function formatStatText(value) {
+  if (typeof value !== 'string') return '—'
+  const trimmed = value.trim()
+  return trimmed || '—'
 }
 
 function noteValue(group, key) {
@@ -59,18 +64,21 @@ function tradingCardFilename(name) {
   return `ruffly-card-${base}-${y}-${m}-${d}.png`
 }
 
-function StatTile({ label, value, hint }) {
+function StatTile({ label, value }) {
+  const long = typeof value === 'string' && value.length > 12
   return (
     <div className="rounded-2xl bg-white/90 px-3 py-2.5 text-center">
       <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
         {label}
       </p>
-      <p className="mt-0.5 text-lg font-extrabold leading-6 text-slate-800">
+      <p
+        className={`mt-0.5 font-extrabold leading-5 text-slate-800 ${
+          long ? 'text-sm' : 'text-lg leading-6'
+        }`}
+        style={{ overflowWrap: 'break-word' }}
+      >
         {value}
       </p>
-      {hint ? (
-        <p className="text-[11px] leading-4 text-slate-400">{hint}</p>
-      ) : null}
     </div>
   )
 }
@@ -102,7 +110,6 @@ function NoteSection({ title, rows, group }) {
 
 function TradingCard({
   dog,
-  fleamailCount,
   cardRef,
   onShare,
   sharing,
@@ -154,12 +161,10 @@ function TradingCard({
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <StatTile label="Stats" value={formatWeightLbs(dog)} hint="Weight" />
-        <StatTile
-          label="Fleamails"
-          value={String(fleamailCount)}
-          hint="sent"
-        />
+        <StatTile label="Weight" value={formatWeightLbs(dog)} />
+        <StatTile label="Age" value={formatAge(dog)} />
+        <StatTile label="Color" value={formatStatText(dog?.colors)} />
+        <StatTile label="Breed" value={formatStatText(dog?.breed)} />
       </div>
 
       <div className="mt-4 space-y-4 rounded-2xl bg-white px-3.5 py-3.5">
@@ -184,10 +189,9 @@ function TradingCard({
 }
 
 /**
- * Profile trading card — stats, fleamails, favorites, dislikes, and PNG share.
+ * Profile trading card — weight, age, color, breed, favorites, dislikes, PNG share.
  */
 export default function TradingCardSheet({ open, dog, onClose }) {
-  const { logs } = useApp()
   const cardRef = useRef(null)
   const [sharing, setSharing] = useState(false)
   const [pendingShare, setPendingShare] = useState(null)
@@ -196,7 +200,6 @@ export default function TradingCardSheet({ open, dog, onClose }) {
   if (!open) return null
 
   const name = dog?.name?.trim() || 'Pup'
-  const fleamailCount = countFleamails(logs, dog?.id)
 
   async function handleShare() {
     if (sharing || !dog) return
@@ -263,12 +266,7 @@ export default function TradingCardSheet({ open, dog, onClose }) {
           <p className="absolute top-[max(2rem,env(safe-area-inset-top))] text-sm font-semibold text-[#F59E0B]">
             Preparing card…
           </p>
-          <TradingCard
-            dog={dog}
-            fleamailCount={fleamailCount}
-            cardRef={cardRef}
-            forCapture
-          />
+          <TradingCard dog={dog} cardRef={cardRef} forCapture />
         </div>
       ) : null}
 
@@ -288,7 +286,6 @@ export default function TradingCardSheet({ open, dog, onClose }) {
           <div className="max-h-[70vh] overflow-y-auto">
             <TradingCard
               dog={dog}
-              fleamailCount={fleamailCount}
               onShare={handleShare}
               sharing={sharing}
             />

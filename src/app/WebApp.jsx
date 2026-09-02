@@ -14,6 +14,7 @@ import CatalogTab from '../components/catalog/CatalogTab'
 import CareGuideTab from '../components/trip/CareGuideTab'
 import HomeScreenBadgePrompt from '../components/layout/HomeScreenBadgePrompt'
 import MealCelebration from '../components/ui/MealCelebration'
+import About from '../pages/About'
 import { useApp } from '../context/AppContext'
 import { track, useAnalyticsScreen } from '../analytics'
 
@@ -35,9 +36,11 @@ function isOwnerAccountIncomplete(ownerAccount) {
 export default function WebApp() {
   const { ownerAccount, dogs, dispatch } = useApp()
   const [activeTab, setActiveTab] = useState('today')
+  const [secondaryReturnTab, setSecondaryReturnTab] = useState('today')
   const [menuDialog, setMenuDialog] = useState(null)
   const [addingNewDog, setAddingNewDog] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
   const [logOpen, setLogOpen] = useState(false)
   const [fleamailOpen, setFleamailOpen] = useState(false)
   const [editLog, setEditLog] = useState(null)
@@ -47,13 +50,16 @@ export default function WebApp() {
   const [celebration, setCelebration] = useState(null)
 
   const accountIncomplete = isOwnerAccountIncomplete(ownerAccount)
+  const isSecondaryTab = activeTab === 'pantry' || activeTab === 'care'
   const screen = showAccount
     ? 'account'
-    : activeTab === 'pantry'
-      ? 'catalog'
-      : activeTab === 'care'
-        ? 'care'
-        : activeTab
+    : showAbout
+      ? 'about'
+      : activeTab === 'pantry'
+        ? 'catalog'
+        : activeTab === 'care'
+          ? 'care'
+          : activeTab
   useAnalyticsScreen(screen)
   const dismissCelebration = useCallback(() => setCelebration(null), [])
   const playCelebration = useCallback((theme) => {
@@ -70,6 +76,26 @@ export default function WebApp() {
     setActiveTab(id)
   }
 
+  /** Catalog / Care Guide — tertiary screens use header back (like Account). */
+  function openSecondaryTab(id) {
+    if (id !== 'pantry' && id !== 'care') {
+      handleTabChange(id)
+      return
+    }
+    if (activeTab === 'today' || activeTab === 'pack') {
+      setSecondaryReturnTab(activeTab)
+    }
+    handleTabChange(id)
+  }
+
+  function leaveSecondaryTab() {
+    const next =
+      secondaryReturnTab === 'today' || secondaryReturnTab === 'pack'
+        ? secondaryReturnTab
+        : 'today'
+    handleTabChange(next)
+  }
+
   function openAddDog() {
     track('open_add_dog', { source: 'Today' })
     setActiveTab('pack')
@@ -83,7 +109,7 @@ export default function WebApp() {
 
   function openCareGuide(dogId) {
     if (dogId) dispatch({ type: 'SET_ACTIVE_DOG', payload: dogId })
-    handleTabChange('care')
+    openSecondaryTab('care')
   }
 
   function openTradingCard(dogId) {
@@ -107,12 +133,12 @@ export default function WebApp() {
     {
       id: 'catalog',
       label: 'Catalog',
-      onClick: () => handleTabChange('pantry'),
+      onClick: () => openSecondaryTab('pantry'),
     },
     {
       id: 'care',
       label: 'Print Care Guide',
-      onClick: () => handleTabChange('care'),
+      onClick: () => openSecondaryTab('care'),
     },
     { id: 'share', label: 'Export Plan', onClick: () => setMenuDialog('share') },
     {
@@ -120,7 +146,7 @@ export default function WebApp() {
       label: 'Receive Plan',
       onClick: () => setMenuDialog('receive'),
     },
-    { id: 'about', label: 'About Us', to: '/about' },
+    { id: 'about', label: 'About Us', onClick: () => setShowAbout(true) },
     {
       id: 'reset',
       label: 'Reset App',
@@ -133,13 +159,22 @@ export default function WebApp() {
     return <MyAccountPage onBack={() => setShowAccount(false)} />
   }
 
+  if (showAbout) {
+    return <About onBack={() => setShowAbout(false)} />
+  }
+
   return (
-    <div className="mx-auto min-h-dvh max-w-lg bg-[#FBF9F5] pb-24 print:max-w-none print:bg-white print:pb-0">
+    <div
+      className={`mx-auto min-h-dvh max-w-lg bg-[#FBF9F5] print:max-w-none print:bg-white print:pb-0 ${
+        isSecondaryTab ? 'pb-8' : 'pb-24'
+      }`}
+    >
       <div className="print:hidden">
         <Header
           subtitle={SUBTITLES[activeTab] ?? SUBTITLES.today}
           menuItems={menuItems}
           menuBadge={accountIncomplete}
+          onBack={isSecondaryTab ? leaveSecondaryTab : undefined}
         />
       </div>
 
@@ -166,13 +201,18 @@ export default function WebApp() {
               track('cancel_add_dog', { source: 'Pack' })
               setAddingNewDog(false)
             }}
-            onAdded={(dogId) => {
+            onAdded={(dogId, options) => {
               setAddingNewDog(false)
-              // Menu is the onboarding goal.
-              if (dogId) {
-                setNewDogMenu(true)
-                openMenuEditor(dogId)
+              const next = options?.next ?? 'menu'
+              if (!dogId) return
+              if (next === 'today') {
+                setActiveTab('today')
+                return
               }
+              // Menu is the onboarding goal when they choose meal plan
+              // (and for “Add another dog”, which still opens the editor).
+              setNewDogMenu(true)
+              openMenuEditor(dogId)
             }}
             onEditMenu={openMenuEditor}
             onPrintCareGuide={openCareGuide}
@@ -186,23 +226,12 @@ export default function WebApp() {
       </main>
 
       <div className="print:hidden">
-        {(activeTab === 'today' || activeTab === 'pack') && (
+        {!isSecondaryTab ? (
           <Navigation
             activeTab={activeTab}
             onChange={handleTabChange}
             onLog={() => openLogSheet({ source: 'Navigation' })}
           />
-        )}
-        {activeTab === 'pantry' || activeTab === 'care' ? (
-          <div className="fixed inset-x-0 bottom-0 border-t border-amber-100 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
-            <button
-              type="button"
-              className="mx-auto block w-full max-w-lg h-12 rounded-2xl bg-[#F59E0B] text-sm font-semibold text-white"
-              onClick={() => handleTabChange('today')}
-            >
-              Back to Today
-            </button>
-          </div>
         ) : null}
       </div>
 

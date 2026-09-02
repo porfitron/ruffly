@@ -850,7 +850,7 @@ function DogTodayCard({
       </Card>
       {sharing ? (
         <p className="pt-1 text-center text-xs leading-5 text-slate-400">
-          Shared from Ruffly.app
+          Pupdate from Ruffly.app
         </p>
       ) : null}
     </li>
@@ -916,7 +916,7 @@ export default function TodayView({
     totalTasks === 0
       ? viewingToday
         ? trackingDogs.length === 0
-          ? 'Log extras with +'
+          ? 'Log with +'
           : 'Nothing on the menu yet'
         : 'No logs this day'
       : totalDue === 0
@@ -1251,12 +1251,13 @@ export default function TodayView({
           shareButton={
             <Button
               variant="ghost"
-              className="share-hide !h-10 !w-10 shrink-0 !px-0 text-[#F59E0B]"
+              className="share-hide !h-10 shrink-0 !px-2.5 text-[#F59E0B]"
               onClick={handleShareLog}
               disabled={sharing}
-              aria-label="Share log"
+              aria-label="Share Pupdate"
               aria-busy={sharing}
             >
+              Pupdate
               <Share size={18} />
             </Button>
           }

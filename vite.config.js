@@ -69,7 +69,7 @@ export default defineConfig({
         name: 'Ruffly',
         short_name: 'Ruffly',
         description:
-          'Precision dog nutrition — calories, portions, pantry, and care sheets.',
+          'Daily logbook for meals, meds, moments, and care — for every dog you look after.',
         theme_color: '#F2B833',
         background_color: '#FBF9F5',
         display: 'standalone',

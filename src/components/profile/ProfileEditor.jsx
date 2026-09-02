@@ -19,10 +19,20 @@ const CALORIE_MODE_OPTIONS = [
   { value: 'calculator', label: 'Calculator' },
 ]
 
+const GENDER_OPTIONS = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'unknown', label: 'Unknown' },
+]
+
 const EMPTY_FORM = {
   name: '',
+  ageYears: '',
+  gender: 'unknown',
   weight: '',
   weightUnit: 'lbs',
+  colors: '',
+  breed: '',
   calorieMode: 'manual',
   manualTargetKcal: '',
   activityLevel: 'neutered_adult',
@@ -45,8 +55,18 @@ function dogToForm(dog) {
       : dog.targetDER
   return {
     name: dog.name ?? '',
+    ageYears:
+      dog.ageYears != null && Number.isFinite(Number(dog.ageYears))
+        ? String(dog.ageYears)
+        : '',
+    gender:
+      dog.gender === 'male' || dog.gender === 'female' || dog.gender === 'unknown'
+        ? dog.gender
+        : 'unknown',
     weight: dog.weight?.toString() ?? '',
     weightUnit: dog.weightUnit ?? 'lbs',
+    colors: dog.colors ?? '',
+    breed: dog.breed ?? '',
     calorieMode,
     manualTargetKcal: seededTarget ? String(seededTarget) : '',
     activityLevel: dog.activityLevel ?? 'neutered_adult',
@@ -154,8 +174,20 @@ export default function ProfileEditor({
       payload: {
         id: dogId,
         name: form.name.trim(),
+        ageYears:
+          form.ageYears === ''
+            ? null
+            : Number.isFinite(Number(form.ageYears))
+              ? Number(form.ageYears)
+              : null,
+        gender:
+          form.gender === 'male' || form.gender === 'female'
+            ? form.gender
+            : 'unknown',
         weight: Number(form.weight),
         weightUnit: form.weightUnit,
+        colors: form.colors.trim(),
+        breed: form.breed.trim(),
         calorieMode: isManual ? 'manual' : 'calculator',
         manualTargetKcal: isManual ? Math.round(Number(form.manualTargetKcal)) : null,
         goal: 'maintain',
@@ -262,6 +294,28 @@ export default function ProfileEditor({
           />
         </Field>
 
+        <Field label="Age (years)">
+          <input
+            className={fieldClassName}
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.1"
+            value={form.ageYears}
+            onChange={(e) => update('ageYears', e.target.value)}
+            placeholder="e.g. 3"
+          />
+        </Field>
+
+        <Field label="Gender">
+          <SegmentedControl
+            ariaLabel="Gender"
+            value={form.gender}
+            onChange={(value) => update('gender', value)}
+            options={GENDER_OPTIONS}
+          />
+        </Field>
+
         <div className="grid grid-cols-[1fr_auto] gap-3">
           <Field label="Weight">
             <input
@@ -288,6 +342,26 @@ export default function ProfileEditor({
             />
           </Field>
         </div>
+
+        <Field label="Color(s)">
+          <input
+            className={fieldClassName}
+            value={form.colors}
+            onChange={(e) => update('colors', e.target.value)}
+            placeholder="e.g. black & white"
+            autoComplete="off"
+          />
+        </Field>
+
+        <Field label="Breed">
+          <input
+            className={fieldClassName}
+            value={form.breed}
+            onChange={(e) => update('breed', e.target.value)}
+            placeholder="e.g. Labrador mix"
+            autoComplete="off"
+          />
+        </Field>
 
         <Field label="Target calories">
           <SegmentedControl

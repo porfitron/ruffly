@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import BrandMark from '../ui/BrandMark'
 import { initialsFromName } from '../profile/DogAvatar'
@@ -9,6 +10,7 @@ export default function Header({
   subtitle,
   menuItems = [],
   menuBadge = false,
+  onBack,
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const { ownerAccount } = useApp()
@@ -19,7 +21,18 @@ export default function Header({
     <>
       <header className="print:hidden flex items-start justify-between gap-3 px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="flex items-start gap-2.5">
-          <BrandMark className="mt-0.5 h-9 w-9" />
+          {onBack ? (
+            <button
+              type="button"
+              className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-white text-slate-700 shadow-sm hover:bg-amber-50"
+              aria-label="Back"
+              onClick={onBack}
+            >
+              <ArrowLeft size={22} strokeWidth={2.5} />
+            </button>
+          ) : (
+            <BrandMark className="mt-0.5 h-9 w-9" />
+          )}
           <div>
             <div className="flex items-center gap-2">
               <p className="text-2xl font-extrabold tracking-tight text-[#F59E0B]">

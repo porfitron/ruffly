@@ -78,6 +78,10 @@ function normalizeNoteGroup(raw, empty) {
 
 /** Completable profile fields (post-onboarding). Not required for Today / logging. */
 export const EMPTY_DOG_PROFILE_DETAILS = {
+  ageYears: null,
+  gender: 'unknown',
+  breed: '',
+  colors: '',
   medicationNeedIds: [],
   behaviorNotes: '',
   licenseNumber: '',
@@ -90,6 +94,20 @@ export const EMPTY_DOG_PROFILE_DETAILS = {
 export const EMPTY_DOG_ONBOARDING = {
   basicsDone: false,
   menuDone: false,
+}
+
+export const DOG_GENDERS = ['male', 'female', 'unknown']
+
+export function normalizeDogGender(value) {
+  if (value === 'male' || value === 'female' || value === 'unknown') return value
+  return 'unknown'
+}
+
+export function normalizeDogAgeYears(value) {
+  if (value == null || value === '') return null
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 0) return null
+  return Math.round(n * 10) / 10
 }
 
 export function createId(prefix) {
@@ -126,6 +144,10 @@ export function normalizeDogRecord(dog, { menuDoneHint } = {}) {
     onboarding,
     presence,
     away: presence === 'away',
+    ageYears: normalizeDogAgeYears(dog.ageYears),
+    gender: normalizeDogGender(dog.gender),
+    breed: typeof dog.breed === 'string' ? dog.breed : '',
+    colors: typeof dog.colors === 'string' ? dog.colors : '',
     medicationNeedIds: normalizeMedicationNeedIds(dog.medicationNeedIds),
     behaviorNotes: dog.behaviorNotes ?? '',
     licenseNumber: dog.licenseNumber ?? '',
@@ -138,26 +160,101 @@ export function normalizeDogRecord(dog, { menuDoneHint } = {}) {
   }
 }
 
-/** Profile completeness helpers for UI checklists (not gates). */
+/** Profile completeness from ProfileEditor form fields (not a gate). */
 export function getDogProfileCompletion(dog) {
-  const meds = dog?.medicationNeedIds?.length > 0
-  const behavior = Boolean(dog?.behaviorNotes?.trim())
-  const license = Boolean(dog?.licenseNumber?.trim())
-  const vaccines = Boolean(dog?.vaccineInfo?.trim())
-  const microchip = Boolean(dog?.microchipId?.trim())
+  const favorites = dog?.favorites ?? EMPTY_DOG_FAVORITES
+  const dislikes = dog?.dislikes ?? EMPTY_DOG_DISLIKES
+  const hasManualTarget =
+    dog?.calorieMode === 'manual' &&
+    Number(dog?.manualTargetKcal) > 0 &&
+    Number.isFinite(Number(dog?.manualTargetKcal))
+  const hasCalculatorTarget =
+    dog?.calorieMode !== 'manual' &&
+    Number(dog?.targetDER) > 0 &&
+    Number.isFinite(Number(dog?.targetDER))
+  const hasCalorieTarget = hasManualTarget || hasCalculatorTarget
+
   const fields = [
-    { key: 'medicationNeeds', label: 'Medication needs', done: meds },
-    { key: 'behaviorNotes', label: 'Behavior notes', done: behavior },
-    { key: 'licenseNumber', label: 'License number', done: license },
-    { key: 'vaccineInfo', label: 'Vaccine info', done: vaccines },
-    { key: 'microchipId', label: 'Microchip ID', done: microchip },
+    { key: 'photoUrl', label: 'Photo', done: Boolean(dog?.photoUrl) },
+    {
+      key: 'name',
+      label: 'Name',
+      done: Boolean(dog?.name?.trim()),
+    },
+    {
+      key: 'ageYears',
+      label: 'Age',
+      done:
+        dog?.ageYears != null &&
+        Number.isFinite(Number(dog.ageYears)) &&
+        Number(dog.ageYears) >= 0,
+    },
+    {
+      key: 'gender',
+      label: 'Gender',
+      done: dog?.gender === 'male' || dog?.gender === 'female',
+    },
+    {
+      key: 'weight',
+      label: 'Weight',
+      done: Number(dog?.weight) > 0 && Number.isFinite(Number(dog?.weight)),
+    },
+    {
+      key: 'colors',
+      label: 'Color(s)',
+      done: Boolean(dog?.colors?.trim()),
+    },
+    {
+      key: 'breed',
+      label: 'Breed',
+      done: Boolean(dog?.breed?.trim()),
+    },
+    {
+      key: 'calorieTarget',
+      label: 'Calorie target',
+      done: hasCalorieTarget,
+    },
+    {
+      key: 'favorites.foodTreat',
+      label: 'Favorite food / treat',
+      done: Boolean(favorites.foodTreat?.trim()),
+    },
+    {
+      key: 'favorites.toyGame',
+      label: 'Favorite toy / game',
+      done: Boolean(favorites.toyGame?.trim()),
+    },
+    {
+      key: 'favorites.furiends',
+      label: 'Furiends',
+      done: Boolean(favorites.furiends?.trim()),
+    },
+    {
+      key: 'dislikes.people',
+      label: 'Disliked people',
+      done: Boolean(dislikes.people?.trim()),
+    },
+    {
+      key: 'dislikes.places',
+      label: 'Disliked places',
+      done: Boolean(dislikes.places?.trim()),
+    },
+    {
+      key: 'dislikes.things',
+      label: 'Disliked things',
+      done: Boolean(dislikes.things?.trim()),
+    },
   ]
   const doneCount = fields.filter((f) => f.done).length
+  const total = fields.length
+  const percent =
+    total === 0 ? 0 : Math.round((doneCount / total) * 100)
   return {
     fields,
     doneCount,
-    total: fields.length,
-    isComplete: doneCount === fields.length,
+    total,
+    percent,
+    isComplete: doneCount === total,
     basicsDone: Boolean(dog?.onboarding?.basicsDone),
     menuDone: Boolean(dog?.onboarding?.menuDone),
   }

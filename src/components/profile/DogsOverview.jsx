@@ -21,6 +21,7 @@ import {
 import { track } from '../../analytics'
 import DogSummaryCard from './DogSummaryCard'
 import ProfileEditor from './ProfileEditor'
+import DogOnboarding from '../onboarding/DogOnboarding'
 
 const PRESENCE_OPTIONS = [
   { value: 'tracking', label: 'Tracking' },
@@ -33,7 +34,7 @@ function presenceHint(presence) {
     return 'Away dogs skip Today and logging until they’re back with you.'
   }
   if (presence === 'active') {
-    return 'This pup appears on Today without a checklist. Log extras with +.'
+    return 'This pup appears on Today without a checklist. Log with +.'
   }
   return 'Today shows this pup’s full routine to check off.'
 }
@@ -118,7 +119,7 @@ function DogPackDetail({
           hint={
             completion.isComplete
               ? 'Profile complete'
-              : `${completion.doneCount}/${completion.total} complete`
+              : `${completion.percent}% complete`
           }
           onClick={onEditProfile}
         />
@@ -186,30 +187,24 @@ export default function DogsOverview({
     setExpandedDogId((current) => (current === id ? null : id))
   }
 
-  function handleAdded(dogId) {
+  function handleOnboardingComplete({ dogId, next }) {
     setExpandedDogId(null)
     setEditingDogId(null)
-    onAdded?.(dogId)
+    onAdded?.(dogId, { next })
   }
 
-  if (addingNew) {
+  if (dogs.length === 0 || addingNew) {
     return (
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-slate-800">Add another pup</h2>
-          <Button variant="ghost" className="!h-10 px-3" onClick={onCancelAdd}>
-            Cancel
-          </Button>
-        </div>
-        <ProfileEditor addingNew onAdded={handleAdded} />
-      </div>
-    )
-  }
-
-  if (dogs.length === 0) {
-    return (
-      <div className="space-y-3">
-        <ProfileEditor onAdded={handleAdded} />
+        {addingNew && dogs.length > 0 ? (
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-bold text-slate-800">Add another pup</h2>
+            <Button variant="ghost" className="!h-10 px-3" onClick={onCancelAdd}>
+              Cancel
+            </Button>
+          </div>
+        ) : null}
+        <DogOnboarding onComplete={handleOnboardingComplete} />
       </div>
     )
   }

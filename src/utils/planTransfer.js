@@ -395,6 +395,12 @@ function dogToRow(dog, { includePhotos = true } = {}) {
     presenceToTransfer(dog),
     compactNoteGroup(dog.favorites, FAVORITE_KEYS),
     compactNoteGroup(dog.dislikes, DISLIKE_KEYS),
+    dog.ageYears != null && Number.isFinite(Number(dog.ageYears))
+      ? Number(dog.ageYears)
+      : null,
+    dog.gender === 'male' || dog.gender === 'female' ? dog.gender : null,
+    compactText(dog.breed),
+    compactText(dog.colors),
   ]
 }
 
@@ -451,6 +457,14 @@ function dogFromRow(row) {
     ...presenceFromTransfer(row[20]),
     ...(row[21] && typeof row[21] === 'object' ? { favorites: row[21] } : {}),
     ...(row[22] && typeof row[22] === 'object' ? { dislikes: row[22] } : {}),
+    ...(row[23] != null && Number.isFinite(Number(row[23]))
+      ? { ageYears: Number(row[23]) }
+      : {}),
+    ...(row[24] === 'male' || row[24] === 'female' || row[24] === 'unknown'
+      ? { gender: row[24] }
+      : {}),
+    ...(row[25] ? { breed: row[25] } : {}),
+    ...(row[26] ? { colors: row[26] } : {}),
   }
 }
 
