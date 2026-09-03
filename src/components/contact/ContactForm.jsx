@@ -7,6 +7,18 @@ import { track } from '../../analytics'
 const CONTACT_EMAIL = 'contact@ruffly.app'
 const FORMSUBMIT_URL = `https://formsubmit.co/ajax/${CONTACT_EMAIL}`
 
+function formSubmitMessage(result) {
+  return typeof result?.message === 'string' ? result.message : ''
+}
+
+function needsActivation(message) {
+  return /activat/i.test(message)
+}
+
+function missingReferer(message) {
+  return /web server|html files/i.test(message)
+}
+
 /** Shared FormSubmit contact form for the marketing site and in-app menu. */
 export default function ContactForm({
   defaultName = '',
@@ -44,16 +56,32 @@ export default function ContactForm({
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
+        referrerPolicy: 'origin',
         body: JSON.stringify(payload),
       })
       const result = await response.json().catch(() => ({}))
+      const message = formSubmitMessage(result)
       const ok = result.success === true || result.success === 'true'
-      if (!response.ok || !ok) {
-        throw new Error('Could not send your message.')
+
+      if (ok) {
+        track('send_contact', { result: 'Sent', source })
+        setStatus('sent')
+        form.reset()
+        return
       }
-      track('send_contact', { result: 'Sent', source })
-      setStatus('sent')
-      form.reset()
+
+      if (needsActivation(message)) {
+        track('send_contact', { result: 'Needs activation', source })
+        setStatus('activate')
+        return
+      }
+
+      if (missingReferer(message)) {
+        form.submit()
+        return
+      }
+
+      throw new Error(message || 'Could not send your message.')
     } catch {
       track('send_contact', { result: 'Failed', source })
       setStatus('error')
@@ -81,6 +109,29 @@ export default function ContactForm({
     )
   }
 
+  if (status === 'activate') {
+    return (
+      <Card>
+        <p className="text-lg font-extrabold tracking-tight text-slate-800">
+          One more step
+        </p>
+        <p className="mt-2 text-pretty text-sm leading-relaxed text-slate-500">
+          FormSubmit sent a one-time Activate Form email to{' '}
+          <span className="font-semibold text-slate-700">{CONTACT_EMAIL}</span>.
+          Open that message (check spam if it isn&apos;t in the inbox), click
+          the link, then send your note again.
+        </p>
+        <Button
+          className="mt-5"
+          variant="secondary"
+          onClick={() => setStatus('idle')}
+        >
+          I activated it — send again
+        </Button>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <form
@@ -89,6 +140,9 @@ export default function ContactForm({
         className="space-y-4"
         onSubmit={handleSubmit}
       >
+        <input type="hidden" name="_subject" value="Ruffly contact form" />
+        <input type="hidden" name="_template" value="table" />
+        <input type="hidden" name="_captcha" value="false" />
         <input
           type="text"
           name="_honey"
