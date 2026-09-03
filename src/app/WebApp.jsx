@@ -16,6 +16,7 @@ import HomeScreenBadgePrompt from '../components/layout/HomeScreenBadgePrompt'
 import IosInstallHint from '../components/layout/IosInstallHint'
 import MealCelebration from '../components/ui/MealCelebration'
 import About from '../pages/About'
+import Contact from '../pages/Contact'
 import { useApp } from '../context/AppContext'
 import { track, useAnalyticsScreen } from '../analytics'
 
@@ -42,6 +43,7 @@ export default function WebApp() {
   const [addingNewDog, setAddingNewDog] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
+  const [showContact, setShowContact] = useState(false)
   const [logOpen, setLogOpen] = useState(false)
   const [fleamailOpen, setFleamailOpen] = useState(false)
   const [editLog, setEditLog] = useState(null)
@@ -56,11 +58,13 @@ export default function WebApp() {
     ? 'account'
     : showAbout
       ? 'about'
-      : activeTab === 'pantry'
-        ? 'catalog'
-        : activeTab === 'care'
-          ? 'care'
-          : activeTab
+      : showContact
+        ? 'contact'
+        : activeTab === 'pantry'
+          ? 'catalog'
+          : activeTab === 'care'
+            ? 'care'
+            : activeTab
   useAnalyticsScreen(screen)
   const dismissCelebration = useCallback(() => setCelebration(null), [])
   const playCelebration = useCallback((theme) => {
@@ -149,6 +153,11 @@ export default function WebApp() {
     },
     { id: 'about', label: 'About Us', onClick: () => setShowAbout(true) },
     {
+      id: 'contact',
+      label: 'Contact Us',
+      onClick: () => setShowContact(true),
+    },
+    {
       id: 'reset',
       label: 'Reset App',
       danger: true,
@@ -162,6 +171,16 @@ export default function WebApp() {
 
   if (showAbout) {
     return <About onBack={() => setShowAbout(false)} />
+  }
+
+  if (showContact) {
+    return (
+      <Contact
+        onBack={() => setShowContact(false)}
+        defaultName={ownerAccount?.name}
+        defaultEmail={ownerAccount?.email}
+      />
+    )
   }
 
   return (

@@ -2,6 +2,7 @@ import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
 import Home from './pages/Home'
 import About from './pages/About'
+import Contact from './pages/Contact'
 import WebApp from './app/WebApp'
 import { useAnalyticsScreen } from './analytics'
 import { isStandaloneDisplay } from './utils/appBadge'
@@ -21,7 +22,9 @@ function MarketingPageViews() {
       ? null
       : pathname === '/about'
         ? 'about'
-        : 'home'
+        : pathname === '/contact'
+          ? 'contact'
+          : 'home'
   useAnalyticsScreen(screen)
   return null
 }
@@ -34,6 +37,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
         <Route
           path="/web/*"
           element={

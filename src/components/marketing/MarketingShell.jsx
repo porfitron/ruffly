@@ -2,8 +2,13 @@ import { Link } from 'react-router-dom'
 import BrandMark from '../ui/BrandMark'
 import { track } from '../../analytics'
 
+const footerLinkClassName =
+  'font-bold text-slate-500 underline-offset-4 hover:underline'
+
+const COPYRIGHT_YEAR = new Date().getFullYear()
+
 /**
- * Shared chrome for marketing routes (`/` and `/about`).
+ * Shared chrome for marketing routes (`/`, `/about`, `/contact`).
  * Keeps the oatmeal canvas, wordmark, and Open-the-app CTA consistent.
  */
 export default function MarketingShell({
@@ -39,6 +44,14 @@ export default function MarketingShell({
                 About
               </Link>
             ) : null}
+            {current !== 'contact' ? (
+              <Link
+                to="/contact"
+                className="hidden text-sm font-bold text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline sm:inline"
+              >
+                Contact
+              </Link>
+            ) : null}
             <Link
               to="/web"
               className="inline-flex h-12 items-center justify-center rounded-2xl bg-[#F59E0B] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-500"
@@ -53,24 +66,23 @@ export default function MarketingShell({
       <div className="relative">{children}</div>
 
       <footer className="relative mx-auto max-w-3xl px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-amber-100 pt-6 text-sm">
-          <p className="font-semibold text-slate-400">Ruffly</p>
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-amber-100 pt-6 text-sm">
           <div className="flex flex-wrap gap-4">
-            {current !== 'about' ? (
-              <Link
-                to="/about"
-                className="font-bold text-slate-500 underline-offset-4 hover:underline"
-              >
-                About us
-              </Link>
-            ) : (
-              <Link
-                to="/"
-                className="font-bold text-slate-500 underline-offset-4 hover:underline"
-              >
+            {current !== 'home' ? (
+              <Link to="/" className={footerLinkClassName}>
                 Home
               </Link>
-            )}
+            ) : null}
+            {current !== 'about' ? (
+              <Link to="/about" className={footerLinkClassName}>
+                About us
+              </Link>
+            ) : null}
+            {current !== 'contact' ? (
+              <Link to="/contact" className={footerLinkClassName}>
+                Contact us
+              </Link>
+            ) : null}
             <Link
               to="/web"
               className="font-bold text-[#F59E0B] underline-offset-4 hover:underline"
@@ -80,6 +92,9 @@ export default function MarketingShell({
             </Link>
           </div>
         </div>
+        <p className="mt-4 text-xs font-medium text-slate-400">
+          © {COPYRIGHT_YEAR} Ruffly.app
+        </p>
       </footer>
     </div>
   )

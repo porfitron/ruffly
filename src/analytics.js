@@ -27,6 +27,7 @@ export const GA_MEASUREMENT_ID = 'G-63B163GZQQ'
 export const SCREENS = {
   home: { path: '/', title: 'Home' },
   about: { path: '/about', title: 'About us' },
+  contact: { path: '/contact', title: 'Contact us' },
   today: { path: '/web/today', title: 'Today' },
   pack: { path: '/web/pack', title: 'Pack' },
   catalog: { path: '/web/catalog', title: 'Catalog' },
@@ -78,6 +79,7 @@ const EVENT_CATALOG = {
   save_account: { label: 'Saved account', group: 'Account' },
   reset_app: { label: 'Reset the app', group: 'App' },
   open_app: { label: 'Opened the app', group: 'App' },
+  send_contact: { label: 'Sent a contact message', group: 'Marketing' },
   enable_home_badge: { label: 'Enabled home-screen badge', group: 'App' },
   dismiss_home_badge: { label: 'Dismissed home-screen badge', group: 'App' },
   dismiss_ios_install: { label: 'Dismissed iOS Home Screen hint', group: 'App' },
