@@ -29,6 +29,7 @@ export const SCREENS = {
   about: { path: '/about', title: 'About us' },
   contact: { path: '/contact', title: 'Contact us' },
   today: { path: '/web/today', title: 'Today' },
+  search: { path: '/web/search', title: 'Search' },
   pack: { path: '/web/pack', title: 'Pack' },
   catalog: { path: '/web/catalog', title: 'Catalog' },
   care: { path: '/web/care', title: 'Care guide' },
@@ -68,6 +69,7 @@ const EVENT_CATALOG = {
   remove_catalog_item: { label: 'Removed a catalog item', group: 'Catalog' },
 
   share_today_log: { label: 'Shared today’s log', group: 'Sharing' },
+  share_search_results: { label: 'Shared search results', group: 'Sharing' },
   send_fleamail: { label: 'Sent Fleamail', group: 'Sharing' },
   share_trading_card: { label: 'Shared a trading card', group: 'Sharing' },
   export_plan: { label: 'Exported a plan', group: 'Sharing' },

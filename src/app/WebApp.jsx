@@ -11,6 +11,7 @@ import QuickLogSheet, {
 } from '../components/log/QuickLogSheet'
 import FleamailSheet from '../components/log/FleamailSheet'
 import CatalogTab from '../components/catalog/CatalogTab'
+import SearchView from '../components/search/SearchView'
 import CareGuideTab from '../components/trip/CareGuideTab'
 import HomeScreenBadgePrompt from '../components/layout/HomeScreenBadgePrompt'
 import IosInstallHint from '../components/layout/IosInstallHint'
@@ -22,10 +23,13 @@ import { track, useAnalyticsScreen } from '../analytics'
 
 const SUBTITLES = {
   today: 'What your pack needs today',
+  search: 'Everything you’ve logged',
   pack: 'Dogs, menus & profiles',
   pantry: 'Food, meds & supplements library',
   care: 'Printable notes for a sitter',
 }
+
+const PRIMARY_TABS = ['today', 'search', 'pantry', 'pack']
 
 function isOwnerAccountIncomplete(ownerAccount) {
   if (!ownerAccount) return true
@@ -53,7 +57,7 @@ export default function WebApp() {
   const [celebration, setCelebration] = useState(null)
 
   const accountIncomplete = isOwnerAccountIncomplete(ownerAccount)
-  const isSecondaryTab = activeTab === 'pantry' || activeTab === 'care'
+  const isSecondaryTab = activeTab === 'care'
   const screen = showAccount
     ? 'account'
     : showAbout
@@ -81,24 +85,18 @@ export default function WebApp() {
     setActiveTab(id)
   }
 
-  /** Catalog / Care Guide — tertiary screens use header back (like Account). */
-  function openSecondaryTab(id) {
-    if (id !== 'pantry' && id !== 'care') {
-      handleTabChange(id)
-      return
-    }
-    if (activeTab === 'today' || activeTab === 'pack') {
+  /** Care Guide — tertiary screen uses header back (like Account). */
+  function openSecondaryTab() {
+    if (PRIMARY_TABS.includes(activeTab)) {
       setSecondaryReturnTab(activeTab)
     }
-    handleTabChange(id)
+    handleTabChange('care')
   }
 
   function leaveSecondaryTab() {
-    const next =
-      secondaryReturnTab === 'today' || secondaryReturnTab === 'pack'
-        ? secondaryReturnTab
-        : 'today'
-    handleTabChange(next)
+    handleTabChange(
+      PRIMARY_TABS.includes(secondaryReturnTab) ? secondaryReturnTab : 'today',
+    )
   }
 
   function openAddDog() {
@@ -114,7 +112,7 @@ export default function WebApp() {
 
   function openCareGuide(dogId) {
     if (dogId) dispatch({ type: 'SET_ACTIVE_DOG', payload: dogId })
-    openSecondaryTab('care')
+    openSecondaryTab()
   }
 
   function openTradingCard(dogId) {
@@ -136,14 +134,9 @@ export default function WebApp() {
       showBadge: accountIncomplete,
     },
     {
-      id: 'catalog',
-      label: 'Catalog',
-      onClick: () => openSecondaryTab('pantry'),
-    },
-    {
       id: 'care',
       label: 'Print Care Guide',
-      onClick: () => openSecondaryTab('care'),
+      onClick: () => openSecondaryTab(),
     },
     { id: 'share', label: 'Export Plan', onClick: () => setMenuDialog('share') },
     {
@@ -208,6 +201,12 @@ export default function WebApp() {
             onAddDog={openAddDog}
             onOpenPack={() => handleTabChange('pack')}
             onEditMenu={openMenuEditor}
+          />
+        )}
+
+        {activeTab === 'search' && (
+          <SearchView
+            onEditLog={(log) => openLogSheet({ edit: log, source: 'Search' })}
           />
         )}
 
