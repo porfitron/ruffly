@@ -5,7 +5,15 @@ import Button from '../ui/Button'
 import { Field, SegmentedControl, fieldClassName } from '../ui/Field'
 import { useApp } from '../../context/AppContext'
 import { isDogAway } from '../../utils/dogs'
-import { estimateFoodKcal, isoTimestampOnDayAt, kindLabel, timeInputFromDate } from '../../utils/todayCare'
+import {
+  dateInputFromDate,
+  dayFromDateInput,
+  estimateFoodKcal,
+  isoTimestampOnDayAt,
+  kindLabel,
+  startOfLocalDay,
+  timeInputFromDate,
+} from '../../utils/todayCare'
 import FoodCreateFields, {
   emptyCreate,
   foodCreateIsValid,
@@ -34,6 +42,48 @@ const SLOT_OPTIONS = [
   { value: 'daily', label: 'Daily' },
   { value: 'as_needed', label: 'As needed' },
 ]
+
+function isEditableLogKind(kind) {
+  return kind === 'note' || kind === 'weight'
+}
+
+function clampDayToToday(day) {
+  const today = startOfLocalDay()
+  const source = startOfLocalDay(day)
+  return source.getTime() > today.getTime() ? today : source
+}
+
+function applyLatestWeightToDog(dispatch, dog, logs, extraLog, exceptId) {
+  if (!dog) return
+  const candidates = (logs ?? []).filter(
+    (log) =>
+      log.kind === 'weight' &&
+      log.dogId === dog.id &&
+      log.id !== exceptId,
+  )
+  if (extraLog) candidates.push(extraLog)
+  candidates.sort(
+    (a, b) =>
+      new Date(b.loggedAt ?? 0).getTime() -
+      new Date(a.loggedAt ?? 0).getTime(),
+  )
+  const latest = candidates[0]
+  if (!latest) return
+  const weight = Number(latest.amount)
+  if (!Number.isFinite(weight) || weight <= 0) return
+  const unit = latest.unit || dog.weightUnit || 'lbs'
+  if (Number(dog.weight) === weight && (dog.weightUnit || 'lbs') === unit) {
+    return
+  }
+  dispatch({
+    type: 'UPSERT_DOG',
+    payload: {
+      ...dog,
+      weight,
+      weightUnit: unit,
+    },
+  })
+}
 
 function preferredHomeDogId(homeDogs, preferredId) {
   if (preferredId && homeDogs.some((d) => d.id === preferredId)) {
@@ -88,13 +138,15 @@ export default function QuickLogSheet({
   initialKind = null,
   editLog = null,
 }) {
-  const { dogs, activeDogId, catalog, dispatch, createId } = useApp()
+  const { dogs, activeDogId, catalog, logs, dispatch, createId } = useApp()
   const homeDogs = useMemo(
     () => (dogs ?? []).filter((d) => !isDogAway(d)),
     [dogs],
   )
   const editingNote = editLog?.kind === 'note'
-  const skipChoice = Boolean(initialKind) || editingNote
+  const editingWeight = editLog?.kind === 'weight'
+  const editingLog = isEditableLogKind(editLog?.kind)
+  const skipChoice = Boolean(initialKind) || editingLog
   const [step, setStep] = useState(skipChoice ? 'form' : 'choose')
   const [dogId, setDogId] = useState(
     () => preferredHomeDogId(homeDogs, initialDogId || activeDogId),
@@ -107,6 +159,7 @@ export default function QuickLogSheet({
   const [note, setNote] = useState('')
   const [noteTitle, setNoteTitle] = useState('')
   const [noteTime, setNoteTime] = useState(() => timeInputFromDate())
+  const [logDate, setLogDate] = useState(() => dateInputFromDate())
   const [activityType, setActivityType] = useState('walk')
   const [creating, setCreating] = useState(false)
   const [createForm, setCreateForm] = useState(() =>
@@ -141,20 +194,26 @@ export default function QuickLogSheet({
 
   useEffect(() => {
     if (!open) return
-    const editing = editLog?.kind === 'note'
+    const editing = isEditableLogKind(editLog?.kind)
     setDogId(
       preferredHomeDogId(
         homeDogs,
         editing ? editLog.dogId : initialDogId || activeDogId,
       ),
     )
-    setKind(editing ? 'note' : initialKind || 'food')
+    setKind(editing ? editLog.kind : initialKind || 'food')
     setStep(editing || initialKind ? 'form' : 'choose')
     setQuery('')
     setSelectedId(null)
-    setAmount('')
+    setAmount(
+      editing && editLog.kind === 'weight' && editLog.amount != null
+        ? String(editLog.amount)
+        : '',
+    )
     setUnit(
-      initialKind === 'weight'
+      editing && editLog.kind === 'weight'
+        ? editLog.unit || 'lbs'
+        : initialKind === 'weight'
         ? 'lbs'
         : initialKind === 'activity'
           ? 'min'
@@ -163,10 +222,11 @@ export default function QuickLogSheet({
             : '',
     )
     setNote(editing ? editLog.note ?? '' : '')
-    setNoteTitle(editing ? editLog.label ?? '' : '')
+    setNoteTitle(editing && editLog.kind === 'note' ? editLog.label ?? '' : '')
     setNoteTime(
       timeInputFromDate(editing ? editLog.loggedAt : undefined),
     )
+    setLogDate(dateInputFromDate(editing ? editLog.loggedAt : undefined))
     setActivityType('walk')
     setCreating(false)
     setCreateForm(emptyCreate(initialKind || 'food'))
@@ -218,6 +278,7 @@ export default function QuickLogSheet({
     setNote('')
     setNoteTitle('')
     setNoteTime(timeInputFromDate())
+    setLogDate(dateInputFromDate())
     setActivityType('walk')
     if (next === 'weight') {
       setUnit(dog?.weightUnit ?? 'lbs')
@@ -285,29 +346,55 @@ export default function QuickLogSheet({
     if (kind === 'weight') {
       const weight = Number(amount)
       if (!Number.isFinite(weight) || weight <= 0) return
-      dispatch({
-        type: 'ADD_LOG',
-        payload: {
-          dogId: dog.id,
-          careItemId: null,
-          kind: 'weight',
-          amount: weight,
-          unit: unit || dog.weightUnit || 'lbs',
-          kcal: null,
-          note: note.trim(),
-        },
-      })
-      // Keep dog profile weight in sync
-      dispatch({
-        type: 'UPSERT_DOG',
-        payload: {
-          ...dog,
-          weight,
-          weightUnit: unit || dog.weightUnit || 'lbs',
-        },
-      })
-      savedRef.current = true
-      track('create_log_entry', { item_kind: 'Weight', method: 'Log sheet' })
+      const loggedAt = isoTimestampOnDayAt(
+        clampDayToToday(
+          dayFromDateInput(
+            logDate,
+            editingWeight ? editLog.loggedAt || new Date() : new Date(),
+          ),
+        ),
+        noteTime,
+      )
+      const payload = {
+        dogId: dog.id,
+        careItemId: null,
+        kind: 'weight',
+        amount: weight,
+        unit: unit || dog.weightUnit || 'lbs',
+        kcal: null,
+        note: note.trim(),
+        loggedAt,
+      }
+      if (editingWeight) {
+        dispatch({
+          type: 'UPDATE_LOG',
+          payload: { ...editLog, ...payload },
+        })
+        savedRef.current = true
+        track('edit_log_entry', { item_kind: 'Weight', method: 'Log sheet' })
+        const previousDog = dogs.find((d) => d.id === editLog.dogId)
+        if (previousDog && previousDog.id !== dog.id) {
+          applyLatestWeightToDog(
+            dispatch,
+            previousDog,
+            logs,
+            null,
+            editLog.id,
+          )
+        }
+        applyLatestWeightToDog(
+          dispatch,
+          dog,
+          logs,
+          { ...editLog, ...payload },
+          editLog.id,
+        )
+      } else {
+        dispatch({ type: 'ADD_LOG', payload })
+        savedRef.current = true
+        track('create_log_entry', { item_kind: 'Weight', method: 'Log sheet' })
+        applyLatestWeightToDog(dispatch, dog, logs, payload, null)
+      }
       onClose?.()
       return
     }
@@ -405,11 +492,17 @@ export default function QuickLogSheet({
     onClose?.()
   }
 
-  function handleDeleteNote() {
-    if (!editingNote || !editLog?.id) return
+  function handleDeleteLog() {
+    if (!editingLog || !editLog?.id) return
     dispatch({ type: 'DELETE_LOG', payload: editLog.id })
     savedRef.current = true
-    track('delete_log_entry', { item_kind: 'Note', method: 'Log sheet' })
+    if (editingWeight) {
+      applyLatestWeightToDog(dispatch, dog, logs, null, editLog.id)
+    }
+    track('delete_log_entry', {
+      item_kind: editingWeight ? 'Weight' : 'Note',
+      method: 'Log sheet',
+    })
     onClose?.()
   }
 
@@ -432,11 +525,15 @@ export default function QuickLogSheet({
     ? 'Everyone’s away'
     : choosing
       ? 'What to log?'
-      : editingNote
-        ? 'Edit note'
-        : kind === 'note'
-          ? 'Log note'
-          : `Log ${kindLabel(kind).toLowerCase()}`
+      : editingWeight
+        ? 'Edit weigh-in'
+        : editingNote
+          ? 'Edit note'
+          : kind === 'note'
+            ? 'Log note'
+            : kind === 'weight'
+              ? 'Log weigh-in'
+              : `Log ${kindLabel(kind).toLowerCase()}`
 
   return (
     <Modal open={open} title={modalTitle} onClose={onClose}>
@@ -475,7 +572,7 @@ export default function QuickLogSheet({
                     const nextId = e.target.value
                     setDogId(nextId)
                     const nextDog = homeDogs.find((d) => d.id === nextId)
-                    if (kind === 'weight' && nextDog) {
+                    if (kind === 'weight' && nextDog && !editingWeight) {
                       setUnit(nextDog.weightUnit ?? 'lbs')
                       setAmount(nextDog.weight ? String(nextDog.weight) : '')
                     }
@@ -683,6 +780,30 @@ export default function QuickLogSheet({
                   </div>
                 )}
 
+                {kind === 'weight' ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="Date" htmlFor="ql-log-date">
+                      <input
+                        id="ql-log-date"
+                        type="date"
+                        className={fieldClassName}
+                        value={logDate}
+                        max={dateInputFromDate()}
+                        onChange={(e) => setLogDate(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Time" htmlFor="ql-log-time">
+                      <input
+                        id="ql-log-time"
+                        type="time"
+                        className={fieldClassName}
+                        value={noteTime}
+                        onChange={(e) => setNoteTime(e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                ) : null}
+
                 <Field
                   label={
                     kind === 'activity' && activityType === 'other'
@@ -712,16 +833,20 @@ export default function QuickLogSheet({
               Cancel
             </Button>
             <Button className="flex-1" disabled={!canSave} onClick={handleSave}>
-              {kind === 'note' ? 'Save note' : 'Save log'}
+              {kind === 'note'
+                ? 'Save note'
+                : kind === 'weight'
+                  ? 'Save weigh-in'
+                  : 'Save log'}
             </Button>
           </div>
-          {editingNote ? (
+          {editingLog ? (
             <Button
               variant="ghost"
               className="mt-2 w-full text-red-500"
-              onClick={handleDeleteNote}
+              onClick={handleDeleteLog}
             >
-              Delete note
+              {editingWeight ? 'Delete weigh-in' : 'Delete note'}
             </Button>
           ) : null}
         </>

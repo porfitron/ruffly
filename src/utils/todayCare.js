@@ -53,6 +53,34 @@ export function timeInputFromDate(isoOrDate = new Date()) {
   return `${h}:${m}`
 }
 
+/** `YYYY-MM-DD` for `<input type="date">`. */
+export function dateInputFromDate(isoOrDate = new Date()) {
+  const d = new Date(isoOrDate)
+  const source = Number.isNaN(d.getTime()) ? new Date() : d
+  const y = source.getFullYear()
+  const m = String(source.getMonth() + 1).padStart(2, '0')
+  const day = String(source.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** Local calendar day from a `YYYY-MM-DD` date input. */
+export function dayFromDateInput(yyyyMmDd, fallback = new Date()) {
+  const [yRaw, mRaw, dRaw] = String(yyyyMmDd ?? '').split('-')
+  const year = Number(yRaw)
+  const month = Number(mRaw)
+  const day = Number(dRaw)
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  ) {
+    return startOfLocalDay(fallback)
+  }
+  const parsed = new Date(year, month - 1, day)
+  if (Number.isNaN(parsed.getTime())) return startOfLocalDay(fallback)
+  return startOfLocalDay(parsed)
+}
+
 /** Stamp `day` at a local `HH:MM` time. */
 export function isoTimestampOnDayAt(day, timeHHmm, now = new Date()) {
   const [hRaw, mRaw] = String(timeHHmm ?? '').split(':')
@@ -182,7 +210,7 @@ const QUICK_LOG_KINDS = new Set([
   'note',
   'fleamail',
 ])
-const LOG_ONLY_KINDS = new Set(['note', 'fleamail'])
+const LOG_ONLY_KINDS = new Set(['note', 'fleamail', 'weight'])
 
 const SLOT_DEFAULT_HOUR = {
   breakfast: 8,
@@ -226,7 +254,7 @@ export function todayRowIsDone(row) {
   return row.type === 'meal' ? Boolean(row.done) : Boolean(row.task?.done)
 }
 
-/** Menu / checkable care — notes and fleamails sit on Today but are not due. */
+/** Menu / checkable care — notes, weigh-ins, and fleamails sit on Today but are not due. */
 export function isTodayCheckableRow(row) {
   if (!row) return false
   if (row.type === 'meal') return true
@@ -430,9 +458,12 @@ function claimLogsForMenuItems(menuItems, catalog, todayLogs) {
 function extraTaskFromLog(dog, log, careItem, day = new Date()) {
   const kind = log.kind || careItem?.kind || 'food'
   const note = log.note?.trim() || ''
+  const weightLabel = [log.amount, log.unit]
+    .filter((part) => part != null && part !== '')
+    .join(' ')
   const name =
     kind === 'weight'
-      ? 'Weight'
+      ? weightLabel || 'Weight'
       : kind === 'activity'
         ? log.label || note || 'Activity'
         : kind === 'note'

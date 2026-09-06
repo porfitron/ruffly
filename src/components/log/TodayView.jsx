@@ -10,6 +10,7 @@ import {
   Minus,
   PawPrint,
   Plus,
+  Scale,
   Share,
   X,
 } from 'lucide-react'
@@ -115,8 +116,11 @@ function taskAmount(task) {
 function taskSubtitle(task) {
   const amount = taskAmount(task)
   const note = task.note?.trim().replace(/\s+/g, ' ')
-  if (task.kind === 'note' || task.kind === 'fleamail') {
+  if (task.kind === 'note' || task.kind === 'fleamail' || task.kind === 'weight') {
     const parts = [formatLogTime(task.doneAt)]
+    if (task.kind === 'weight' && amount && amount !== task.name) {
+      parts.push(amount)
+    }
     if (note && note !== task.name) parts.push(note)
     return parts.filter(Boolean).join(' · ')
   }
@@ -139,6 +143,19 @@ function NoteMark({ label, onClick }) {
       aria-label={label}
     >
       <span aria-hidden>📝</span>
+    </button>
+  )
+}
+
+function WeightMark({ label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#F59E0B] ring-1 ring-amber-200"
+      aria-label={label}
+    >
+      <Scale size={20} strokeWidth={2.25} />
     </button>
   )
 }
@@ -249,8 +266,10 @@ function TaskRow({
   reorderHandle = null,
 }) {
   const isNote = task.kind === 'note'
+  const isWeight = task.kind === 'weight'
   const isFleamail = task.kind === 'fleamail'
-  const isLogOnly = isNote || isFleamail
+  const isEditableLog = isNote || isWeight
+  const isLogOnly = isNote || isWeight || isFleamail
   const who = dogName ? `${dogName}’s ` : ''
   return (
     <li
@@ -268,6 +287,11 @@ function TaskRow({
           label={`Edit note ${who}${task.name}`}
           onClick={() => onEdit?.(task)}
         />
+      ) : isWeight ? (
+        <WeightMark
+          label={`Edit weigh-in ${who}${task.name}`}
+          onClick={() => onEdit?.(task)}
+        />
       ) : isFleamail ? (
         <FleamailMark />
       ) : (
@@ -281,7 +305,7 @@ function TaskRow({
           onClick={() => (task.done ? onUndo?.(task) : onDone?.(task))}
         />
       )}
-      {isNote ? (
+      {isEditableLog ? (
         <button
           type="button"
           className="min-w-0 flex-1 text-left"
@@ -1010,7 +1034,7 @@ export default function TodayView({
   }
 
   function logTask(task) {
-    if (task.kind === 'note' || task.kind === 'fleamail') return
+    if (task.kind === 'note' || task.kind === 'fleamail' || task.kind === 'weight') return
     const careItem = (catalog ?? []).find((c) => c.id === task.careItemId)
     const amount = task.amount
     const kcal =
@@ -1044,7 +1068,7 @@ export default function TodayView({
   }
 
   function handleUndo(task) {
-    if (task.kind === 'note' || task.kind === 'fleamail') return
+    if (task.kind === 'note' || task.kind === 'fleamail' || task.kind === 'weight') return
     if (task.doneLogId) {
       dispatch({ type: 'DELETE_LOG', payload: task.doneLogId })
       track('undo_routine', {
@@ -1054,8 +1078,13 @@ export default function TodayView({
     }
   }
 
-  function handleEditNote(task) {
-    if (task?.kind !== 'note' || !task.doneLogId) return
+  function handleEditLog(task) {
+    if (
+      (task?.kind !== 'note' && task?.kind !== 'weight') ||
+      !task.doneLogId
+    ) {
+      return
+    }
     const log = (logs ?? []).find((entry) => entry.id === task.doneLogId)
     if (log) onEditLog?.(log)
   }
@@ -1300,7 +1329,7 @@ export default function TodayView({
                   onMealUndo={handleMealUndo}
                   onItemDone={handleDone}
                   onItemUndo={handleUndo}
-                  onItemEdit={handleEditNote}
+                  onItemEdit={handleEditLog}
                   onItemDelete={handleAskDeleteFleamail}
                 />
               </li>
@@ -1326,7 +1355,7 @@ export default function TodayView({
                   onMealUndo={handleMealUndo}
                   onItemDone={handleDone}
                   onItemUndo={handleUndo}
-                  onItemEdit={handleEditNote}
+                  onItemEdit={handleEditLog}
                   onItemDelete={handleAskDeleteFleamail}
                   cardRef={(node) => setDogCardRef(group.dog.id, node)}
                 />
@@ -1354,7 +1383,7 @@ export default function TodayView({
             onMealUndo={handleMealUndo}
             onItemDone={handleDone}
             onItemUndo={handleUndo}
-            onItemEdit={handleEditNote}
+            onItemEdit={handleEditLog}
             onItemDelete={handleAskDeleteFleamail}
             cardRef={(node) => setDogCardRef(group.dog.id, node)}
           />

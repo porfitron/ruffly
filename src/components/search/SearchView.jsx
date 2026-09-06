@@ -207,7 +207,8 @@ function ResultRow({ entry, onEditLog }) {
   const meta = [kindLabel(log.kind), amountLabel(log)]
   if (log.kind === 'food' && log.kcal) meta.push(`${Math.round(log.kcal)} kcal`)
   if (note && note !== title) meta.push(note)
-  const editable = log.kind === 'note' && Boolean(onEditLog)
+  const editable =
+    (log.kind === 'note' || log.kind === 'weight') && Boolean(onEditLog)
 
   const body = (
     <>
@@ -231,7 +232,11 @@ function ResultRow({ entry, onEditLog }) {
           type="button"
           className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
           onClick={() => onEditLog(log)}
-          aria-label={`Edit note ${title}`}
+          aria-label={
+            log.kind === 'weight'
+              ? `Edit weigh-in ${title}`
+              : `Edit note ${title}`
+          }
         >
           {body}
         </button>
