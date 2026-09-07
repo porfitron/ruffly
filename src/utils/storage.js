@@ -1,4 +1,8 @@
 import { dogPresence, seedPackOrder, uniqueDogSlug } from './dogs'
+import {
+  normalizeCourseDate,
+  normalizeMedSchedule,
+} from './medSchedule'
 
 const STORAGE_KEY = 'ruffly_app_data_v1'
 
@@ -357,6 +361,14 @@ function normalizeCareItem(raw) {
       kcalPerCan: raw.kcalPerCan ?? null,
       ...(raw.proteinPercent != null ? { proteinPercent: raw.proteinPercent } : {}),
       ...(raw.fatPercent != null ? { fatPercent: raw.fatPercent } : {}),
+    }
+  }
+  if (kind === 'med') {
+    return {
+      ...base,
+      schedule: normalizeMedSchedule(raw.schedule),
+      courseStart: normalizeCourseDate(raw.courseStart),
+      courseEnd: normalizeCourseDate(raw.courseEnd),
     }
   }
   return base

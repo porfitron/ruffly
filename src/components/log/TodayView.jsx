@@ -784,10 +784,16 @@ function DogTodayCard({
 }) {
   const subtitle = !followsPlan
     ? rows.some(isTodayCheckableRow)
-      ? viewingToday
-        ? 'Logged today'
-        : 'Logged'
-      : 'No plan — log with +'
+      ? dueCount > 0
+        ? `${dueCount} med${dueCount === 1 ? '' : 's'} left`
+        : viewingToday
+          ? 'Logged today'
+          : 'Logged'
+      : hasMenu
+        ? viewingToday
+          ? 'No meds due today'
+          : 'No meds this day'
+        : 'No plan — log with +'
     : rows.some(isTodayCheckableRow) && dueCount === 0
       ? viewingToday
         ? 'All done for today'
@@ -828,15 +834,17 @@ function DogTodayCard({
               <h3 className="truncate font-bold text-slate-800">
                 {dog.name}
               </h3>
-              {followsPlan ? (
-                <button
-                  type="button"
-                  className="share-hide shrink-0 text-xs font-semibold text-[#F59E0B]"
-                  onClick={() => onEditMenu?.(dog.id)}
-                >
-                  {hasMenu ? 'Edit routine' : 'Add routine'}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="share-hide shrink-0 text-xs font-semibold text-[#F59E0B]"
+                onClick={() => onEditMenu?.(dog.id)}
+              >
+                {hasMenu
+                  ? 'Edit routine'
+                  : followsPlan
+                    ? 'Add routine'
+                    : 'Add meds'}
+              </button>
             </div>
             <p className="text-xs text-slate-400">{subtitle}</p>
             <KcalBar logged={kcalLogged} target={targetDER} />
@@ -866,9 +874,21 @@ function DogTodayCard({
               Set up
             </button>
           </p>
-        ) : !followsPlan ? (
+        ) : !followsPlan && !hasMenu ? (
           <p className="rounded-2xl bg-[#FBF9F5] px-3 py-3 text-sm text-slate-500">
-            Nothing logged yet. Use + to add food, meds, or extras.
+            Log with + or{' '}
+            <button
+              type="button"
+              className="share-hide font-semibold text-[#F59E0B]"
+              onClick={() => onEditMenu?.(dog.id)}
+            >
+              add a scheduled med
+            </button>{' '}
+            so the next dose shows here.
+          </p>
+        ) : !followsPlan && hasMenu ? (
+          <p className="rounded-2xl bg-[#FBF9F5] px-3 py-3 text-sm text-slate-500">
+            No meds due this day. Use + for extras.
           </p>
         ) : null}
       </Card>
@@ -924,11 +944,6 @@ export default function TodayView({
     0,
   )
   const totalTasks = groups.reduce((sum, g) => sum + g.tasks.length, 0)
-  const trackingCareRows = trackingGroups.reduce(
-    (sum, g) => sum + g.rows.filter(isTodayCheckableRow).length,
-    0,
-  )
-  const trackingDue = trackingGroups.reduce((sum, g) => sum + g.dueCount, 0)
 
   function shiftDay(delta) {
     const next = addLocalDays(viewingDay, delta)
@@ -1303,15 +1318,15 @@ export default function TodayView({
         <p className="share-hide px-0.5 text-sm text-red-600">{shareError}</p>
       ) : null}
 
-      {trackingCareRows > 0 && trackingDue === 0 ? (
+      {totalCareRows > 0 && totalDue === 0 ? (
         <Card className="border border-emerald-100 bg-emerald-50/50 text-center">
           <p className="text-base font-bold text-emerald-800">
             Pack’s looking good
           </p>
           <p className="mt-1 text-sm text-emerald-700/80">
             {viewingToday
-              ? 'Everything on today’s menus is logged. Tap Log if something extra happened.'
-              : 'Everything on this day’s menus was logged.'}
+              ? 'Everything due today is logged. Tap Log if something extra happened.'
+              : 'Everything due this day was logged.'}
           </p>
         </Card>
       ) : null}

@@ -1,6 +1,11 @@
 /** Calendar day helpers + “what’s due today” from menus vs logs. */
 
 import { isDogAway, isDogTracking } from './dogs'
+import {
+  formatMedScheduleLabel,
+  isMedDueOnDay,
+  normalizeMedSchedule,
+} from './medSchedule'
 
 export function startOfLocalDay(date = new Date()) {
   const d = new Date(date)
@@ -158,6 +163,8 @@ export function slotSortKey(slot) {
     dinner: 3,
     night: 4,
     daily: 5,
+    weekly: 5,
+    monthly: 5,
     as_needed: 9,
     extra: 10,
   }
@@ -167,6 +174,8 @@ export function slotSortKey(slot) {
 export function formatSlotLabel(slot) {
   const raw = String(slot ?? 'daily')
   if (raw === 'as_needed') return 'As needed'
+  if (raw === 'weekly') return 'Weekly'
+  if (raw === 'monthly') return 'Monthly'
   if (raw === 'extra') return 'Today only'
   return raw.charAt(0).toUpperCase() + raw.slice(1)
 }
@@ -519,6 +528,20 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
 
     const slot = menuItem.slot ?? 'daily'
     const doneLog = menuItem.id ? claimed.get(menuItem.id) : undefined
+    if (
+      careItem.kind === 'med' &&
+      !doneLog &&
+      !isMedDueOnDay(careItem, logs, dog.id, day)
+    ) {
+      continue
+    }
+
+    const schedule =
+      careItem.kind === 'med' ? normalizeMedSchedule(careItem.schedule) : null
+    const slotLabel =
+      !isMealSlot(slot) && schedule && schedule !== 'daily'
+        ? formatMedScheduleLabel(schedule)
+        : formatSlotLabel(slot)
 
     tasks.push({
       id: `${dog.id}:${menuItem.id}`,
@@ -533,7 +556,7 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
       flavor: careItem.flavor,
       category: careItem.category,
       slot,
-      slotLabel: formatSlotLabel(slot),
+      slotLabel,
       amount: menuItem.amount ?? careItem.defaultAmount,
       unit: menuItem.unit ?? careItem.unit,
       done: Boolean(doneLog),
@@ -561,11 +584,14 @@ export function buildDogTodayTasks(dog, menuItems, catalog, logs, day = new Date
 /** Tracking and active dogs in pack order (away dogs are omitted). */
 export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new Date()) {
   const groups = []
+  const byId = catalogById(catalog)
   for (const dog of dogs ?? []) {
     if (isDogAway(dog)) continue
     const followsPlan = isDogTracking(dog)
     const storedMenu = menusByDogId?.[dog.id] ?? []
-    const menu = followsPlan ? storedMenu : []
+    const menu = followsPlan
+      ? storedMenu
+      : storedMenu.filter((item) => byId.get(item.careItemId)?.kind === 'med')
     const tasks = buildDogTodayTasks(dog, menu, catalog, logs, day)
     const rows = groupTodayTasks(tasks, dog.todayRowOrder, day)
     const kcalLogged = foodKcalLoggedToday(logs, dog.id, day)
@@ -586,7 +612,9 @@ export function buildPackTodayTasks(dogs, menusByDogId, catalog, logs, day = new
       ).length,
       kcalLogged,
       targetDER: dog.targetDER ?? null,
-      hasMenu: followsPlan && storedMenu.length > 0,
+      hasMenu: followsPlan
+        ? storedMenu.length > 0
+        : menu.length > 0,
     })
   }
   return groups

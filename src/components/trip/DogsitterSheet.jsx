@@ -14,6 +14,7 @@ import {
   groupTodayTasks,
   kindLabel,
 } from '../../utils/todayCare'
+import { formatMedScheduleSummary } from '../../utils/medSchedule'
 
 function formatMealParts(servings, meal) {
   const parts = []
@@ -84,6 +85,8 @@ function menuRowsForDog(catalog, menu) {
         amount,
         unit,
         productUrl: careItem.productUrl,
+        scheduleSummary:
+          careItem.kind === 'med' ? formatMedScheduleSummary(careItem) : '',
       }
     })
     .filter(Boolean)
@@ -293,7 +296,12 @@ function CareSheetDocument({
                 <ul className="mt-2 space-y-2">
                   {group.items.map((item) => {
                     const amountLabel = formatMenuAmount(item.amount, item.unit)
-                    const subtitle = [kindLabel(item.kind), item.brand, item.flavor]
+                    const subtitle = [
+                      kindLabel(item.kind),
+                      item.scheduleSummary,
+                      item.brand,
+                      item.flavor,
+                    ]
                       .filter(Boolean)
                       .join(' · ')
                     return (

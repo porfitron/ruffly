@@ -13,7 +13,15 @@ import FoodCreateFields, {
   buildFoodCareItem,
   foodListLabel,
 } from './FoodCreateFields'
+import MedScheduleFields from './MedScheduleFields'
 import { kindLabel as analyticsKind, track } from '../../analytics'
+import {
+  COURSE_RANGE_DAYS,
+  courseRangeFromDates,
+  datesFromCourseRange,
+  formatMedScheduleSummary,
+  normalizeMedSchedule,
+} from '../../utils/medSchedule'
 
 const KIND_FILTERS = [
   { value: 'all', label: 'All' },
@@ -37,6 +45,7 @@ function itemMatchesQuery(item, query) {
     item.flavor,
     item.kind,
     item.notes,
+    item.kind === 'med' ? formatMedScheduleSummary(item) : null,
   ]
     .filter(Boolean)
     .join(' ')
@@ -55,6 +64,7 @@ function densitySummary(item) {
 function NonFoodEditor({ item, kind, initialName = '', onDone }) {
   const { dispatch, createId } = useApp()
   const isEdit = Boolean(item)
+  const isMed = (item?.kind ?? kind) === 'med'
   const [form, setForm] = useState(() =>
     item
       ? {
@@ -67,6 +77,14 @@ function NonFoodEditor({ item, kind, initialName = '', onDone }) {
         }
       : emptyCreate(kind, initialName),
   )
+  const [schedule, setSchedule] = useState(() =>
+    isMed ? normalizeMedSchedule(item?.schedule) : 'daily',
+  )
+  const [courseRange, setCourseRange] = useState(() =>
+    isMed
+      ? courseRangeFromDates(item?.courseStart, item?.courseEnd)
+      : [0, COURSE_RANGE_DAYS],
+  )
 
   const canSave = Boolean(form.name?.trim())
 
@@ -76,19 +94,37 @@ function NonFoodEditor({ item, kind, initialName = '', onDone }) {
     const defaultAmount = form.defaultAmount
       ? Number(form.defaultAmount)
       : null
+    const payload = {
+      id: item?.id ?? createId('item'),
+      kind: item?.kind ?? kind,
+      name: form.name.trim(),
+      brand: form.brand.trim(),
+      notes: form.notes?.trim?.() ?? form.notes ?? '',
+      defaultAmount: Number.isFinite(defaultAmount) ? defaultAmount : null,
+      unit: form.unit.trim() || 'unit',
+      kcalPerUnit: null,
+      productUrl: item?.productUrl ?? '',
+    }
+    if (isMed) {
+      const fromSlider = datesFromCourseRange(courseRange[0], courseRange[1])
+      const initialRange = item
+        ? courseRangeFromDates(item.courseStart, item.courseEnd)
+        : null
+      const sliderUnchanged =
+        initialRange != null &&
+        courseRange[0] === initialRange[0] &&
+        courseRange[1] === initialRange[1]
+      payload.schedule = schedule
+      payload.courseStart = sliderUnchanged
+        ? (item.courseStart ?? null)
+        : fromSlider.courseStart
+      payload.courseEnd = sliderUnchanged
+        ? (item.courseEnd ?? null)
+        : fromSlider.courseEnd
+    }
     dispatch({
       type: 'UPSERT_CARE_ITEM',
-      payload: {
-        id: item?.id ?? createId('item'),
-        kind: item?.kind ?? kind,
-        name: form.name.trim(),
-        brand: form.brand.trim(),
-        notes: form.notes?.trim?.() ?? form.notes ?? '',
-        defaultAmount: Number.isFinite(defaultAmount) ? defaultAmount : null,
-        unit: form.unit.trim() || 'unit',
-        kcalPerUnit: null,
-        productUrl: item?.productUrl ?? '',
-      },
+      payload,
     })
     track(isEdit ? 'edit_catalog_item' : 'add_catalog_item', {
       item_kind: analyticsKind(item?.kind ?? kind),
@@ -157,6 +193,14 @@ function NonFoodEditor({ item, kind, initialName = '', onDone }) {
           onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
         />
       </Field>
+      {isMed ? (
+        <MedScheduleFields
+          schedule={schedule}
+          range={courseRange}
+          onScheduleChange={setSchedule}
+          onRangeChange={setCourseRange}
+        />
+      ) : null}
       <Button type="submit" className="w-full !h-11" disabled={!canSave}>
         {isEdit ? 'Save changes' : `Add ${kindLabel(kind).toLowerCase()}`}
       </Button>
@@ -255,7 +299,9 @@ export default function CatalogTab() {
         <div>
           <h2 className="text-lg font-bold text-slate-800">Catalog</h2>
           <p className="mt-0.5 text-sm text-slate-500">
-            Food, meds, and supplements you reuse in menus and logs.
+            Food, meds, and supplements you reuse in menus and logs. Give a med
+            a schedule and put it on a dog’s menu so the next dose shows on
+            Today.
           </p>
         </div>
 
@@ -337,6 +383,7 @@ export default function CatalogTab() {
             />
           ) : (
             <NonFoodEditor
+              key={createKind}
               kind={createKind}
               initialName={query.trim()}
               onDone={closeCreate}
@@ -441,6 +488,9 @@ export default function CatalogTab() {
                           <p className="mt-0.5 text-sm text-slate-500">
                             {[
                               item.brand,
+                              item.kind === 'med'
+                                ? formatMedScheduleSummary(item)
+                                : null,
                               item.defaultAmount != null
                                 ? `${item.defaultAmount}${item.unit ? ` ${item.unit}` : ''}`
                                 : null,

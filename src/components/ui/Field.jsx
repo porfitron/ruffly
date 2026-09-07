@@ -18,14 +18,15 @@ export function Field({ label, hint, children, className = '', htmlFor }) {
   )
 }
 
-export function SegmentedControl({ value, onChange, options, ariaLabel }) {
+export function SegmentedControl({ value, onChange, options, ariaLabel, columns }) {
+  const cols = columns ?? options.length
   return (
     <div
       role="group"
       aria-label={ariaLabel}
       className="mt-1 grid gap-2 rounded-2xl bg-[#FBF9F5] p-1"
       style={{
-        gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`,
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
       }}
     >
       {options.map((option) => {

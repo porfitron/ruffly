@@ -6,6 +6,7 @@ import Button from '../ui/Button'
 import Modal from '../ui/Modal'
 import BrandMark from '../ui/BrandMark'
 import { fieldClassName } from '../ui/Field'
+import DateRangeSlider, { DATE_RANGE_DAYS } from '../ui/DateRangeSlider'
 import DogAvatar from '../profile/DogAvatar'
 import { useApp } from '../../context/AppContext'
 import { foodListLabel } from '../catalog/FoodCreateFields'
@@ -37,9 +38,7 @@ const PAGE_SIZE = 50
 /** Keep shared screenshots readable (and inside iOS canvas limits). */
 const SHARE_LIMIT = 20
 /** Date range slider stops: 14 days back through today. */
-const RANGE_DAYS = 14
-/** Matches the slider thumb width, so the gold fill lines up with the circles. */
-const THUMB_PX = 24
+const RANGE_DAYS = DATE_RANGE_DAYS
 
 function FilterPill({ active, onClick, children }) {
   return (
@@ -73,72 +72,6 @@ function DogPill({ dog, active, onClick }) {
       <DogAvatar name={dog.name} photoUrl={dog.photoUrl} size="xs" />
       <span className="max-w-28 truncate">{dog.name?.trim() || 'Pup'}</span>
     </button>
-  )
-}
-
-const RANGE_INPUT_CLASS = [
-  'pointer-events-none absolute inset-x-0 top-1/2 h-11 w-full -translate-y-1/2 appearance-none bg-transparent',
-  '[&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[#F59E0B] [&::-webkit-slider-thumb]:shadow-md',
-  '[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-[#F59E0B]',
-].join(' ')
-
-/** Thumb centres sit half a thumb inside each end, so offset the fill to match. */
-function thumbOffset(percent) {
-  return `calc(${percent}% + ${(0.5 - percent / 100) * THUMB_PX}px)`
-}
-
-function DateRangeSlider({ start, end, onChange, startLabel, endLabel }) {
-  const startPercent = (start / RANGE_DAYS) * 100
-  const endPercent = (end / RANGE_DAYS) * 100
-  const spanPercent = endPercent - startPercent
-
-  return (
-    <div>
-      <div className="relative h-11">
-        <div className="absolute left-3 right-3 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-amber-100" />
-        <div
-          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[#F59E0B]"
-          style={{
-            left: thumbOffset(startPercent),
-            width: `calc(${spanPercent}% - ${(spanPercent / 100) * THUMB_PX}px)`,
-          }}
-        />
-        {/* Dragging one circle past the other pushes it, so neither can stick. */}
-        <input
-          type="range"
-          min={0}
-          max={RANGE_DAYS}
-          value={start}
-          onChange={(e) => {
-            const next = Number(e.target.value)
-            onChange([next, Math.max(end, next)])
-          }}
-          className={RANGE_INPUT_CLASS}
-          // Both circles sit on today until dragged, so start needs the top layer.
-          style={{ zIndex: start === RANGE_DAYS ? 2 : 1 }}
-          aria-label="Start date"
-          aria-valuetext={startLabel}
-        />
-        <input
-          type="range"
-          min={0}
-          max={RANGE_DAYS}
-          value={end}
-          onChange={(e) => {
-            const next = Number(e.target.value)
-            onChange([Math.min(start, next), next])
-          }}
-          className={RANGE_INPUT_CLASS}
-          style={{ zIndex: 1 }}
-          aria-label="End date"
-          aria-valuetext={endLabel}
-        />
-      </div>
-      <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-        <span>{startLabel}</span>
-        <span>{endLabel}</span>
-      </div>
-    </div>
   )
 }
 
@@ -695,6 +628,7 @@ export default function SearchView({ onEditLog }) {
                     onChange={setRange}
                     startLabel={rangeStartLabel}
                     endLabel={rangeEndLabel}
+                    max={RANGE_DAYS}
                   />
                 </div>
               </div>

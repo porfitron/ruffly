@@ -102,6 +102,8 @@ const SLOT_LABELS = {
   breakfast: 'Breakfast',
   evening: 'Evening',
   daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
   as_needed: 'As needed',
 }
 

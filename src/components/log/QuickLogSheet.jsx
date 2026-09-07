@@ -9,6 +9,7 @@ import {
   dateInputFromDate,
   dayFromDateInput,
   estimateFoodKcal,
+  formatSlotLabel,
   isoTimestampOnDayAt,
   kindLabel,
   startOfLocalDay,
@@ -20,8 +21,17 @@ import FoodCreateFields, {
   buildFoodCareItem,
   foodListLabel,
 } from '../catalog/FoodCreateFields'
+import MedScheduleFields from '../catalog/MedScheduleFields'
 import LogChoice from './LogChoice'
 import { kindLabel as analyticsKind, slotLabel, track } from '../../analytics'
+import {
+  COURSE_RANGE_DAYS,
+  formatMedScheduleLabel,
+  formatMedScheduleSummary,
+  medRepeatsOnMenu,
+  medSchedulePayload,
+  menuSlotForMed,
+} from '../../utils/medSchedule'
 
 const ACTIVITY_OPTIONS = [
   { value: 'walk', label: 'Walk' },
@@ -41,6 +51,12 @@ const SLOT_OPTIONS = [
   { value: 'evening', label: 'Evening' },
   { value: 'daily', label: 'Daily' },
   { value: 'as_needed', label: 'As needed' },
+]
+
+const MED_TIME_OPTIONS = [
+  { value: 'breakfast', label: 'Breakfast' },
+  { value: 'evening', label: 'Evening' },
+  { value: 'daily', label: 'Anytime' },
 ]
 
 function isEditableLogKind(kind) {
@@ -108,7 +124,7 @@ function nonFoodCreateIsValid(form) {
   return Boolean(form?.name?.trim())
 }
 
-function buildNonFoodCareItem(form, id, kind, amount, unit) {
+function buildNonFoodCareItem(form, id, kind, amount, unit, scheduleFields) {
   const defaultAmount =
     amount !== ''
       ? Number(amount)
@@ -125,7 +141,35 @@ function buildNonFoodCareItem(form, id, kind, amount, unit) {
     unit: (unit || form.unit || '').trim() || 'tablet',
     kcalPerUnit: null,
     productUrl: '',
+    ...(kind === 'med' ? scheduleFields : {}),
   }
+}
+
+function ensureRepeatingMedOnMenu({
+  dispatch,
+  createId,
+  dogId,
+  menu,
+  careItem,
+  amount,
+  unit,
+}) {
+  const existing = (menu ?? []).find((item) => item.careItemId === careItem.id)
+  if (existing) return existing
+  if (!medRepeatsOnMenu(careItem)) return null
+  const qty = Number(amount)
+  const next = {
+    id: createId('menu'),
+    careItemId: careItem.id,
+    slot: menuSlotForMed(careItem, 'daily'),
+    amount: Number.isFinite(qty) && qty > 0 ? qty : careItem.defaultAmount ?? null,
+    unit: unit || careItem.unit || null,
+  }
+  dispatch({
+    type: 'SET_DOG_MENU',
+    payload: { dogId, items: [...(menu ?? []), next] },
+  })
+  return next
 }
 
 /** Quick log sheet — choose Food / Med / Supplement / Weight / Activity / Note / Fleamail. */
@@ -138,7 +182,8 @@ export default function QuickLogSheet({
   initialKind = null,
   editLog = null,
 }) {
-  const { dogs, activeDogId, catalog, logs, dispatch, createId } = useApp()
+  const { dogs, activeDogId, catalog, logs, menusByDogId, dispatch, createId } =
+    useApp()
   const homeDogs = useMemo(
     () => (dogs ?? []).filter((d) => !isDogAway(d)),
     [dogs],
@@ -165,6 +210,11 @@ export default function QuickLogSheet({
   const [createForm, setCreateForm] = useState(() =>
     emptyCreate(initialKind || 'food'),
   )
+  const [medSchedule, setMedSchedule] = useState('daily')
+  const [medCourseRange, setMedCourseRange] = useState(() => [
+    0,
+    COURSE_RANGE_DAYS,
+  ])
   const savedRef = useRef(false)
   const wasOpenRef = useRef(false)
   const kindRef = useRef(kind)
@@ -230,6 +280,8 @@ export default function QuickLogSheet({
     setActivityType('walk')
     setCreating(false)
     setCreateForm(emptyCreate(initialKind || 'food'))
+    setMedSchedule('daily')
+    setMedCourseRange([0, COURSE_RANGE_DAYS])
     // Only reset when the sheet opens
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -247,6 +299,7 @@ export default function QuickLogSheet({
           item.brand,
           item.flavor,
           item.notes,
+          item.kind === 'med' ? formatMedScheduleSummary(item) : null,
         ]
           .filter(Boolean)
           .join(' ')
@@ -275,6 +328,8 @@ export default function QuickLogSheet({
     setCreating(false)
     setQuery('')
     setCreateForm(emptyCreate(next))
+    setMedSchedule('daily')
+    setMedCourseRange([0, COURSE_RANGE_DAYS])
     setNote('')
     setNoteTitle('')
     setNoteTime(timeInputFromDate())
@@ -450,6 +505,9 @@ export default function QuickLogSheet({
           kind,
           amount,
           unit,
+          kind === 'med'
+            ? medSchedulePayload(medSchedule, medCourseRange)
+            : undefined,
         )
       } else {
         return
@@ -471,6 +529,20 @@ export default function QuickLogSheet({
     const kcal =
       kind === 'food' ? estimateFoodKcal(careItem, qty) : null
 
+    const menu = menusByDogId?.[dog.id] ?? []
+    const menuItem =
+      kind === 'med'
+        ? ensureRepeatingMedOnMenu({
+            dispatch,
+            createId,
+            dogId: dog.id,
+            menu,
+            careItem,
+            amount: qty,
+            unit: logUnit,
+          }) ?? menu.find((item) => item.careItemId === careItem.id)
+        : null
+
     dispatch({
       type: 'ADD_LOG',
       payload: {
@@ -481,6 +553,7 @@ export default function QuickLogSheet({
         unit: logUnit,
         kcal,
         note: note.trim(),
+        ...(menuItem ? { menuItemId: menuItem.id } : {}),
       },
     })
     savedRef.current = true
@@ -617,8 +690,19 @@ export default function QuickLogSheet({
                                 : 'bg-[#FBF9F5] text-slate-700 hover:bg-amber-50/80'
                             }`}
                           >
-                            <span className="truncate">
-                              {catalogItemLabel(item)}
+                            <span className="min-w-0">
+                              <span className="block truncate">
+                                {catalogItemLabel(item)}
+                              </span>
+                              {item.kind === 'med' ? (
+                                <span
+                                  className={`block truncate text-xs font-normal ${
+                                    active ? 'text-amber-700/80' : 'text-slate-400'
+                                  }`}
+                                >
+                                  {formatMedScheduleSummary(item)}
+                                </span>
+                              ) : null}
                             </span>
                           </button>
                         </li>
@@ -632,6 +716,8 @@ export default function QuickLogSheet({
                       setCreating(true)
                       setSelectedId(null)
                       setCreateForm(emptyCreate(kind, query.trim()))
+                      setMedSchedule('daily')
+                      setMedCourseRange([0, COURSE_RANGE_DAYS])
                     }}
                   >
                     <Plus size={16} />
@@ -679,6 +765,15 @@ export default function QuickLogSheet({
                           }
                         />
                       </Field>
+                      {kind === 'med' ? (
+                        <MedScheduleFields
+                          schedule={medSchedule}
+                          range={medCourseRange}
+                          onScheduleChange={setMedSchedule}
+                          onRangeChange={setMedCourseRange}
+                          hint="Right end is no end date — weekly and monthly doses stay on Today until you log them."
+                        />
+                      ) : null}
                     </>
                   )}
                   <Button
@@ -870,6 +965,11 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
   const [query, setQuery] = useState('')
   const [creating, setCreating] = useState(false)
   const [createForm, setCreateForm] = useState(() => emptyCreate('food'))
+  const [medSchedule, setMedSchedule] = useState('daily')
+  const [medCourseRange, setMedCourseRange] = useState(() => [
+    0,
+    COURSE_RANGE_DAYS,
+  ])
 
   const kindCatalog = useMemo(
     () => (catalog ?? []).filter((item) => item.kind === pickKind),
@@ -886,6 +986,8 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
     setQuery('')
     setCreating(false)
     setCreateForm(emptyCreate('food'))
+    setMedSchedule('daily')
+    setMedCourseRange([0, COURSE_RANGE_DAYS])
     // Intentionally not depending on activeDogId/dogs — picker owns selection while open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, dogId])
@@ -902,23 +1004,31 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
   const candidates = useMemo(() => {
     const q = query.trim().toLowerCase()
     // Only hide items already on this slot — same food can be breakfast + evening.
-    const usedInSlot = new Set(
-      menu
-        .filter((m) => (m.slot ?? 'daily') === slot)
-        .map((m) => m.careItemId),
+    const usedIds = new Set(
+      pickKind === 'med'
+        ? menu.map((m) => m.careItemId)
+        : menu
+            .filter((m) => (m.slot ?? 'daily') === slot)
+            .map((m) => m.careItemId),
     )
     return kindCatalog
-      .filter((item) => !usedInSlot.has(item.id))
+      .filter((item) => !usedIds.has(item.id))
       .filter((item) => {
         if (!q) return true
-        const hay = [item.name, item.formula, item.brand, item.flavor]
+        const hay = [
+          item.name,
+          item.formula,
+          item.brand,
+          item.flavor,
+          item.kind === 'med' ? formatMedScheduleSummary(item) : null,
+        ]
           .filter(Boolean)
           .join(' ')
           .toLowerCase()
         return hay.includes(q)
       })
       .slice(0, 10)
-  }, [kindCatalog, query, menu, slot])
+  }, [kindCatalog, query, menu, slot, pickKind])
 
   function selectDog(nextId) {
     setSelectedDogId(nextId)
@@ -939,6 +1049,8 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
   function startCreate(seedName = '') {
     setCreating(true)
     setCreateForm(emptyCreate(pickKind, seedName || query.trim()))
+    setMedSchedule('daily')
+    setMedCourseRange([0, COURSE_RANGE_DAYS])
   }
 
   function handleKindChange(next) {
@@ -946,6 +1058,9 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
     setQuery('')
     setCreating(false)
     setCreateForm(emptyCreate(next))
+    setMedSchedule('daily')
+    setMedCourseRange([0, COURSE_RANGE_DAYS])
+    setSlot(next === 'med' ? 'daily' : 'breakfast')
   }
 
   function parseAmount(value) {
@@ -971,19 +1086,21 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
         : careItem.defaultAmount
     const unit =
       careItem.unit || (careItem.kind === 'food' ? 'g' : null)
+    const nextSlot =
+      careItem.kind === 'med' ? menuSlotForMed(careItem, slot) : slot
     setMenuItems([
       ...menu,
       {
         id: createId('menu'),
         careItemId: careItem.id,
-        slot,
+        slot: nextSlot,
         amount: Number.isFinite(Number(amount)) ? Number(amount) : null,
         unit,
       },
     ])
     track('add_routine_item', {
       item_kind: analyticsKind(careItem.kind),
-      slot: slotLabel(slot),
+      slot: slotLabel(nextSlot),
     })
     setQuery('')
     setCreating(false)
@@ -1028,6 +1145,9 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
         unit: createForm.unit.trim() || 'unit',
         kcalPerUnit: null,
         productUrl: '',
+        ...(pickKind === 'med'
+          ? medSchedulePayload(medSchedule, medCourseRange)
+          : {}),
       }
     }
     dispatch({ type: 'UPSERT_CARE_ITEM', payload: careItem })
@@ -1095,13 +1215,14 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
         )}
 
         <p className="text-sm text-slate-500">
-          Planned care for Today. Set grams (or other amounts) on each item.
+          Planned care for Today. Scheduled meds show for Tracking and Active
+          pups; set grams (or other amounts) on each item.
         </p>
 
         {menu.length === 0 ? (
           <p className="rounded-2xl bg-[#FBF9F5] px-3 py-3 text-sm text-slate-500">
-            Start with breakfast food for {dog.name}, then add meds or
-            supplements as needed.
+            Start with breakfast food for {dog.name}, then add meds — daily,
+            weekly, monthly, or as needed.
           </p>
         ) : (
           <ul className="space-y-2">
@@ -1126,7 +1247,11 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
                         {title}
                       </p>
                       <p className="text-xs text-slate-400">
-                        {kindLabel(kind)} · {item.slot}
+                        {kindLabel(kind)} ·{' '}
+                        {kind === 'med'
+                          ? formatMedScheduleSummary(care) ||
+                            formatSlotLabel(item.slot)
+                          : formatSlotLabel(item.slot)}
                       </p>
                     </div>
                     <Button
@@ -1203,14 +1328,30 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
             ariaLabel="Item kind"
           />
         </Field>
-        <Field label="When">
-          <SegmentedControl
-            value={slot}
-            onChange={handleSlotChange}
-            options={SLOT_OPTIONS}
-            ariaLabel="Menu slot"
-          />
-        </Field>
+        {pickKind === 'med' ? (
+          creating && medSchedule !== 'daily' ? null : (
+            <Field
+              label="Time of day"
+              hint="For daily meds. Weekly, monthly, and as-needed use the med’s schedule."
+            >
+              <SegmentedControl
+                value={slot === 'as_needed' ? 'daily' : slot}
+                onChange={handleSlotChange}
+                options={MED_TIME_OPTIONS}
+                ariaLabel="Med time of day"
+              />
+            </Field>
+          )
+        ) : (
+          <Field label="When">
+            <SegmentedControl
+              value={slot}
+              onChange={handleSlotChange}
+              options={SLOT_OPTIONS}
+              ariaLabel="Menu slot"
+            />
+          </Field>
+        )}
 
         {creating ? (
           <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/40 p-3">
@@ -1283,6 +1424,15 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
                     />
                   </Field>
                 </div>
+                {pickKind === 'med' ? (
+                  <MedScheduleFields
+                    schedule={medSchedule}
+                    range={medCourseRange}
+                    onScheduleChange={setMedSchedule}
+                    onRangeChange={setMedCourseRange}
+                    hint="Right end is no end date — the next dose stays on Today until you log it."
+                  />
+                ) : null}
               </>
             )}
             <div className="flex gap-2">
@@ -1329,14 +1479,25 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
                   <button
                     type="button"
                     onClick={() => addItem(item)}
-                    className="flex w-full items-center justify-between rounded-2xl bg-[#FBF9F5] px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-amber-50"
+                    className="flex w-full items-center justify-between gap-2 rounded-2xl bg-[#FBF9F5] px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-amber-50"
                   >
-                    <span className="truncate">
-                      {item.kind === 'food' ? foodListLabel(item) : item.name}
+                    <span className="min-w-0">
+                      <span className="block truncate">
+                        {item.kind === 'food' ? foodListLabel(item) : item.name}
+                      </span>
+                      {item.kind === 'med' ? (
+                        <span className="block truncate text-xs font-normal text-slate-400">
+                          {formatMedScheduleSummary(item)}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="ml-2 flex shrink-0 items-center gap-1 text-xs font-semibold text-[#F59E0B]">
                       <Plus size={14} />
-                      {slot === 'as_needed' ? 'Add' : slot}
+                      {item.kind === 'med'
+                        ? formatMedScheduleLabel(item.schedule)
+                        : slot === 'as_needed'
+                          ? 'Add'
+                          : slot}
                     </span>
                   </button>
                 </li>
@@ -1344,8 +1505,9 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
             </ul>
             {candidates.length === 0 && !query.trim() ? (
               <p className="px-1 text-xs text-slate-400">
-                Every saved {kindName} is already on {slot.replace('_', ' ')}.
-                Create a new one below, or pick another slot.
+                {pickKind === 'med'
+                  ? `Every saved ${kindName} is already on this menu. Create a new one below.`
+                  : `Every saved ${kindName} is already on ${slot.replace('_', ' ')}. Create a new one below, or pick another slot.`}
               </p>
             ) : null}
             {candidates.length === 0 && query.trim() ? (
@@ -1364,7 +1526,8 @@ export function MenuEditorSheet({ open, dogId, onClose, onDone, onDogChange }) {
                 onClick={() => startCreate()}
               >
                 <Plus size={16} />
-                New {kindName} for {slot.replace('_', ' ')}
+                New {kindName}
+                {pickKind === 'med' ? '' : ` for ${slot.replace('_', ' ')}`}
               </Button>
             )}
           </div>

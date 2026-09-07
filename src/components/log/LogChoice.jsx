@@ -18,7 +18,7 @@ const CHOICES = [
   {
     value: 'med',
     label: 'Medication',
-    hint: 'Extra dose or as-needed med',
+    hint: 'Daily, weekly, monthly, or as needed',
     icon: Pill,
   },
   {

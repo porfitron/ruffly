@@ -306,6 +306,12 @@ function catalogToRow(item) {
       item.proteinPercent ?? null,
       item.fatPercent ?? null,
     )
+  } else if (item.kind === 'med') {
+    row.push(
+      item.schedule ?? 'daily',
+      item.courseStart || null,
+      item.courseEnd || null,
+    )
   }
   return row
 }
@@ -336,6 +342,14 @@ function catalogFromRow(row) {
       ...(row[14] != null ? { kcalPerCan: row[14] } : {}),
       ...(row[15] != null ? { proteinPercent: row[15] } : {}),
       ...(row[16] != null ? { fatPercent: row[16] } : {}),
+    }
+  }
+  if (kind === 'med') {
+    return {
+      ...item,
+      ...(row[9] ? { schedule: row[9] } : {}),
+      ...(row[10] ? { courseStart: row[10] } : {}),
+      ...(row[11] ? { courseEnd: row[11] } : {}),
     }
   }
   return item

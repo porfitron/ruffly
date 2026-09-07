@@ -34,7 +34,7 @@ function presenceHint(presence) {
     return 'Away dogs skip Today and logging until they’re back with you.'
   }
   if (presence === 'active') {
-    return 'This pup appears on Today without a checklist. Log with +.'
+    return 'This pup appears on Today without a food checklist. Scheduled meds still show; log everything else with +.'
   }
   return 'Today shows this pup’s full routine to check off.'
 }
